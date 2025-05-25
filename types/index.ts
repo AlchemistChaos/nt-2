@@ -81,4 +81,53 @@ export interface FoodItem {
   quantity_grams?: number;
   quantity_ml?: number;
   nutrition: NutritionData;
+}
+
+export interface Biometric {
+  id: string;
+  user_id: string;
+  weight_kg?: number;
+  height_cm?: number;
+  body_fat_percentage?: number;
+  recorded_at: string;
+  created_at: string;
+}
+
+export interface Goal {
+  id: string;
+  user_id: string;
+  goal_type: 'weight_loss' | 'weight_gain' | 'body_fat_reduction' | 'muscle_gain' | 'maintenance';
+  target_weight_kg?: number;
+  target_body_fat_percentage?: number;
+  target_date?: string;
+  daily_calorie_target?: number;
+  daily_protein_target?: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DailyTarget {
+  id: string;
+  user_id: string;
+  goal_id?: string;
+  date: string;
+  calories_target: number;
+  protein_target: number;
+  carbs_target?: number;
+  fat_target?: number;
+  is_accepted: boolean;
+  created_at: string;
+}
+
+export interface CalorieRecommendation {
+  dailyCalories: number;
+  dailyProtein: number;
+  dailyCarbs?: number;
+  dailyFat?: number;
+  reasoning: string;
+  bmr: number;
+  tdee: number;
+  deficit?: number;
+  surplus?: number;
 } 

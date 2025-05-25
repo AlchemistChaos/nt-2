@@ -1,5 +1,5 @@
 import { createClient } from './server'
-import { User, Preference, Meal, MealItem, ChatMessage, MealWithItems } from '@/types'
+import { User, Preference, Meal, MealItem, ChatMessage, MealWithItems, Biometric, Goal, DailyTarget } from '@/types'
 
 export async function getCurrentUser(): Promise<User | null> {
   const supabase = await createClient()
@@ -162,4 +162,165 @@ export async function addChatMessage(
     .single()
 
   return message
+}
+
+// Biometrics functions
+export async function getUserBiometrics(userId: string): Promise<Biometric[]> {
+  const supabase = await createClient()
+  
+  const { data: biometrics } = await supabase
+    .from('biometrics')
+    .select('*')
+    .eq('user_id', userId)
+    .order('recorded_at', { ascending: false })
+
+  return biometrics || []
+}
+
+export async function getLatestBiometric(userId: string): Promise<Biometric | null> {
+  const supabase = await createClient()
+  
+  const { data: biometric } = await supabase
+    .from('biometrics')
+    .select('*')
+    .eq('user_id', userId)
+    .order('recorded_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  return biometric
+}
+
+export async function addBiometric(
+  userId: string,
+  biometricData: Omit<Biometric, 'id' | 'user_id' | 'created_at'>
+): Promise<Biometric | null> {
+  const supabase = await createClient()
+  
+  const { data: biometric } = await supabase
+    .from('biometrics')
+    .insert({
+      user_id: userId,
+      ...biometricData
+    })
+    .select()
+    .single()
+
+  return biometric
+}
+
+// Goals functions
+export async function getUserGoals(userId: string): Promise<Goal[]> {
+  const supabase = await createClient()
+  
+  const { data: goals } = await supabase
+    .from('goals')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+
+  return goals || []
+}
+
+export async function getActiveGoal(userId: string): Promise<Goal | null> {
+  const supabase = await createClient()
+  
+  const { data: goal } = await supabase
+    .from('goals')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  return goal
+}
+
+export async function addGoal(
+  userId: string,
+  goalData: Omit<Goal, 'id' | 'user_id' | 'created_at' | 'updated_at'>
+): Promise<Goal | null> {
+  const supabase = await createClient()
+  
+  // Deactivate existing goals first
+  await supabase
+    .from('goals')
+    .update({ is_active: false })
+    .eq('user_id', userId)
+    .eq('is_active', true)
+  
+  const { data: goal } = await supabase
+    .from('goals')
+    .insert({
+      user_id: userId,
+      ...goalData
+    })
+    .select()
+    .single()
+
+  return goal
+}
+
+export async function updateGoal(
+  goalId: string,
+  updates: Partial<Goal>
+): Promise<Goal | null> {
+  const supabase = await createClient()
+  
+  const { data: goal } = await supabase
+    .from('goals')
+    .update(updates)
+    .eq('id', goalId)
+    .select()
+    .single()
+
+  return goal
+}
+
+// Daily targets functions
+export async function getTodaysDailyTarget(userId: string): Promise<DailyTarget | null> {
+  const supabase = await createClient()
+  const today = new Date().toISOString().split('T')[0]
+  
+  const { data: target } = await supabase
+    .from('daily_targets')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('date', today)
+    .single()
+
+  return target
+}
+
+export async function addDailyTarget(
+  userId: string,
+  targetData: Omit<DailyTarget, 'id' | 'user_id' | 'created_at'>
+): Promise<DailyTarget | null> {
+  const supabase = await createClient()
+  
+  const { data: target } = await supabase
+    .from('daily_targets')
+    .upsert({
+      user_id: userId,
+      ...targetData
+    })
+    .select()
+    .single()
+
+  return target
+}
+
+export async function acceptDailyTarget(userId: string, date: string): Promise<DailyTarget | null> {
+  const supabase = await createClient()
+  
+  const { data: target } = await supabase
+    .from('daily_targets')
+    .update({ is_accepted: true })
+    .eq('user_id', userId)
+    .eq('date', date)
+    .select()
+    .single()
+
+  return target
 } 

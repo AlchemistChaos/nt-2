@@ -8,7 +8,7 @@ import { ChatMessage as ChatMessageComponent } from '@/components/custom/ChatMes
 import { ImageUploadButton } from '@/components/custom/ImageUploadButton'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Send, LogOut, Settings } from 'lucide-react'
+import { Send, LogOut, Settings, Target } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useTodaysMeals, useChatMessages, queryKeys } from '@/lib/supabase/client-cache'
 import { useQueryClient } from '@tanstack/react-query'
@@ -192,6 +192,14 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
             <span className="text-sm text-gray-500">Welcome, {user.name || user.email}</span>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push('/goals')}
+              title="Goals & Profile"
+            >
+              <Target className="h-5 w-5" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
