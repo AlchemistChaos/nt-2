@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { User, SavedItem } from '@/types'
+import { useState, useEffect } from 'react'
+import { User, SavedItem, Brand } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -9,11 +9,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Plus, Search, Clock, Star, Package, Utensils, Pill } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useSavedItems, useBrands, useSupplementSchedules } from '@/lib/supabase/client-cache'
+import { useSavedItems, useBrands, useSupplementSchedules, useBrandStats } from '@/lib/supabase/client-cache'
 import { SavedItemCard } from '@/components/custom/SavedItemCard'
 import { CreateSavedItemModal } from '@/components/custom/CreateSavedItemModal'
 import { EditSavedItemModal } from '@/components/custom/EditSavedItemModal'
 import { CreateBrandModal } from '@/components/custom/CreateBrandModal'
+import { EditBrandModal } from '@/components/custom/EditBrandModal'
+import { BrandDetailModal } from '@/components/custom/BrandDetailModal'
+import { BrandCard } from '@/components/custom/BrandCard'
 
 interface LibraryPageClientProps {
   user: User
@@ -25,13 +28,30 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
   const [showCreateItemModal, setShowCreateItemModal] = useState(false)
   const [showCreateBrandModal, setShowCreateBrandModal] = useState(false)
   const [showEditItemModal, setShowEditItemModal] = useState(false)
+  const [showEditBrandModal, setShowEditBrandModal] = useState(false)
+  const [showBrandDetailModal, setShowBrandDetailModal] = useState(false)
   const [editingItem, setEditingItem] = useState<SavedItem | null>(null)
+  const [editingBrand, setEditingBrand] = useState<Brand | null>(null)
+  const [viewingBrand, setViewingBrand] = useState<Brand | null>(null)
   const [activeTab, setActiveTab] = useState('items')
 
   // Fetch data using React Query
   const { data: savedItems = [], isLoading: itemsLoading } = useSavedItems(user.id)
-  const { data: brands = [], isLoading: brandsLoading } = useBrands()
+  const { data: brands = [], isLoading: brandsLoading, isError: brandsError, error: brandsFetchError } = useBrands()
   const { data: supplementSchedules = [], isLoading: schedulesLoading } = useSupplementSchedules(user.id)
+  const { data: brandStats = {} } = useBrandStats(user.id)
+
+  // DEBUG: Log brands data whenever it changes
+  useEffect(() => {
+    console.log('[LibraryPageClient DEBUG] useEffect triggered. brandsLoading:', brandsLoading, 'brandsError:', brandsError)
+    if (brandsFetchError) {
+      console.error('[LibraryPageClient DEBUG] Error fetching brands in useBrands:', brandsFetchError);
+    }
+    if (!brandsLoading && !brandsError) {
+      const brandSummary = brands.map(b => ({ id: b.id, name: b.name }));
+      console.log(`[LibraryPageClient DEBUG] Brands data updated. Count: ${brands.length}. Brands (summary):`, brandSummary);
+    }
+  }, [brands, brandsLoading, brandsError, brandsFetchError])
 
   // Filter items based on search query
   const filteredItems = savedItems.filter(item =>
@@ -80,6 +100,26 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
   const handleCloseEditModal = () => {
     setShowEditItemModal(false)
     setEditingItem(null)
+  }
+
+  const handleEditBrand = (brand: Brand) => {
+    setEditingBrand(brand)
+    setShowEditBrandModal(true)
+  }
+
+  const handleCloseBrandEditModal = () => {
+    setShowEditBrandModal(false)
+    setEditingBrand(null)
+  }
+
+  const handleViewBrandDetails = (brand: Brand) => {
+    setViewingBrand(brand)
+    setShowBrandDetailModal(true)
+  }
+
+  const handleCloseBrandDetailModal = () => {
+    setShowBrandDetailModal(false)
+    setViewingBrand(null)
   }
 
   return (
@@ -199,6 +239,17 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                 <p className="text-gray-500 mt-2">Loading brands...</p>
               </div>
+            ) : brandsError ? (
+              <Card>
+                <CardContent className="text-center py-8">
+                  <Star className="h-12 w-12 text-red-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-red-700 mb-2">Error Loading Brands</h3>
+                  <p className="text-gray-500 mb-4">
+                    There was an issue fetching the brands. Please try again later.
+                  </p>
+                  <pre className="text-xs text-left bg-red-50 p-2 rounded">{brandsFetchError?.message}</pre>
+                </CardContent>
+              </Card>
             ) : filteredBrands.length === 0 ? (
               <Card>
                 <CardContent className="text-center py-8">
@@ -218,24 +269,16 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredBrands.map((brand) => (
-                  <Card key={brand.id}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg">{brand.name}</CardTitle>
-                        <Badge className={getBrandTypeColor(brand.type)}>
-                          {brand.type.replace('_', ' ')}
-                        </Badge>
-                      </div>
-                      {brand.description && (
-                        <CardDescription>{brand.description}</CardDescription>
-                      )}
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-sm text-gray-500">
-                        {savedItems.filter(item => item.brand_id === brand.id).length} saved items
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <BrandCard
+                    key={brand.id}
+                    brand={brand}
+                    brandStats={brandStats[brand.id]}
+                    onEdit={handleEditBrand}
+                    onViewDetails={handleViewBrandDetails}
+                    onBrandUpdated={() => {
+                      // React Query will automatically refetch
+                    }}
+                  />
                 ))}
               </div>
             )}
@@ -318,6 +361,21 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
         onClose={handleCloseEditModal}
         item={editingItem}
         brands={brands}
+      />
+
+      <EditBrandModal
+        isOpen={showEditBrandModal}
+        onClose={handleCloseBrandEditModal}
+        brand={editingBrand}
+      />
+
+      <BrandDetailModal
+        isOpen={showBrandDetailModal}
+        onClose={handleCloseBrandDetailModal}
+        brand={viewingBrand}
+        savedItems={savedItems}
+        brands={brands}
+        brandStats={viewingBrand ? brandStats[viewingBrand.id] : undefined}
       />
     </div>
   )

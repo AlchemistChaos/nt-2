@@ -90,6 +90,7 @@ ALTER TABLE supplement_schedules ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Brands are viewable by everyone" ON brands FOR SELECT USING (true);
 CREATE POLICY "Authenticated users can insert brands" ON brands FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "Authenticated users can update brands" ON brands FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "Authenticated users can delete brands" ON brands FOR DELETE USING (auth.role() = 'authenticated');
 
 -- Saved items are private to each user
 CREATE POLICY "Users can view own saved items" ON saved_items FOR SELECT USING (auth.uid() = user_id);

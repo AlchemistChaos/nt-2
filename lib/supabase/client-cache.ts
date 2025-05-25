@@ -230,20 +230,28 @@ export function useAddChatMessage() {
 
 // Quick Add Library hooks
 export function useBrands() {
-  return useQuery({
+  const supabase = getSupabaseClient()
+  return useQuery<Brand[]>({
     queryKey: queryKeys.brands,
-    queryFn: async (): Promise<Brand[]> => {
-      const supabase = getSupabaseClient()
-      const { data: brands } = await supabase
+    queryFn: async () => {
+      const cacheBuster = Date.now();
+      console.log(`[useBrands queryFn DEBUG] START - Fetching brands. CacheBuster: ${cacheBuster}. Simplified select.`);
+      const { data, error } = await supabase
         .from('brands')
         .select('*')
-        .order('name')
+        .order('name', { ascending: true })
+        .order('id', { ascending: true });
 
-      return brands || []
+      if (error) {
+        console.error('[useBrands queryFn DEBUG] ERROR - Error fetching brands:', error);
+        throw error;
+      }
+      const logData = data?.map((b: Brand) => ({ id: b.id, name: b.name, type: b.type }));
+      console.log('[useBrands queryFn DEBUG] SUCCESS - Fetched brands data (simplified):', logData);
+      console.log(`[useBrands queryFn DEBUG] Fetched ${data?.length || 0} brands.`);
+      return data || [];
     },
-    staleTime: 10 * 60 * 1000, // 10 minutes (brands don't change often)
-    gcTime: 30 * 60 * 1000, // 30 minutes
-  })
+  });
 }
 
 export function useSavedItems(userId: string) {
@@ -423,5 +431,120 @@ export function useCreateBrand() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.brands })
     },
+  })
+}
+
+export function useUpdateBrand() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ brandId, brandData }: {
+      brandId: string
+      brandData: Partial<Omit<Brand, 'id' | 'created_at' | 'updated_at'>>
+    }) => {
+      console.log('useUpdateBrand mutation called with:', { brandId, brandData })
+      const supabase = getSupabaseClient()
+      const { data: brand, error } = await supabase
+        .from('brands')
+        .update(brandData)
+        .eq('id', brandId)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Supabase error updating brand:', error)
+        throw error
+      }
+
+      console.log('Brand updated successfully:', brand)
+      return brand
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.brands })
+      queryClient.invalidateQueries({ queryKey: ['savedItems'] })
+    },
+  })
+}
+
+export function useDeleteBrand() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async (brandId: string) => {
+      console.log('useDeleteBrand mutation called with brandId:', brandId)
+      const supabase = getSupabaseClient()
+      
+      // First check if there are any saved items using this brand
+      const { data: itemsUsingBrand, error: checkError } = await supabase
+        .from('saved_items')
+        .select('id')
+        .eq('brand_id', brandId)
+        .limit(1)
+
+      if (checkError) {
+        console.error('Error checking for items using brand:', checkError)
+        throw checkError
+      }
+
+      if (itemsUsingBrand && itemsUsingBrand.length > 0) {
+        throw new Error('Cannot delete brand that has saved items. Please delete or reassign the items first.')
+      }
+
+      const { error } = await supabase
+        .from('brands')
+        .delete()
+        .eq('id', brandId)
+
+      if (error) {
+        console.error('Supabase error deleting brand:', error)
+        throw error
+      }
+
+      console.log('Brand deleted from database')
+      return true
+    },
+    onSuccess: () => {
+      console.log('useDeleteBrand onSuccess called, invalidating queries')
+      // Invalidate brands for all users since we don't have userId here
+      queryClient.invalidateQueries({ queryKey: ['brands'] })
+      queryClient.invalidateQueries({ queryKey: ['brandStats'] })
+      queryClient.invalidateQueries({ queryKey: ['savedItems'] })
+    },
+    onError: (error) => {
+      console.error('useDeleteBrand onError called:', error)
+    }
+  })
+}
+
+export function useBrandStats(userId: string) {
+  return useQuery({
+    queryKey: ['brandStats', userId],
+    queryFn: async (): Promise<Record<string, { itemCount: number; totalUsage: number }>> => {
+      const supabase = getSupabaseClient()
+      const { data: items } = await supabase
+        .from('saved_items')
+        .select('brand_id, times_used')
+        .eq('user_id', userId)
+        .not('brand_id', 'is', null)
+
+      const stats: Record<string, { itemCount: number; totalUsage: number }> = {}
+      
+      if (items) {
+        items.forEach((item: { brand_id: string | null; times_used: number | null }) => {
+          if (item.brand_id) {
+            if (!stats[item.brand_id]) {
+              stats[item.brand_id] = { itemCount: 0, totalUsage: 0 }
+            }
+            stats[item.brand_id].itemCount++
+            stats[item.brand_id].totalUsage += item.times_used || 0
+          }
+        })
+      }
+
+      return stats
+    },
+    enabled: !!userId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes
   })
 } 
