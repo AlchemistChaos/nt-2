@@ -194,7 +194,7 @@ async function processIntentAndTakeAction(
         (lowerMessage.includes('log') && !lowerMessage.includes('preference')) ||
         (lowerMessage.includes('for') && (lowerMessage.includes('lunch') || lowerMessage.includes('breakfast') || lowerMessage.includes('dinner') || lowerMessage.includes('snack')))
     ) {
-      const mealData = extractMealDataFromMessage(aiResponse, userMessage)
+      const mealData = await processMealFromMessage(userMessage, image)
       if (mealData && mealData.name) {
         console.log('Logging meal:', mealData) // Debug log
         const meal = await addMeal(userId, {
@@ -214,7 +214,7 @@ async function processIntentAndTakeAction(
 
     // Intent: Plan a meal
     if (lowerMessage.includes('plan') && (lowerMessage.includes('meal') || lowerMessage.includes('dinner') || lowerMessage.includes('lunch') || lowerMessage.includes('breakfast'))) {
-      const mealData = extractMealDataFromMessage(aiResponse, userMessage)
+      const mealData = await processMealFromMessage(userMessage, image)
       if (mealData && mealData.name) {
         const meal = await addMeal(userId, {
           meal_name: mealData.name,
@@ -232,7 +232,7 @@ async function processIntentAndTakeAction(
       const plannedMeal = todaysMeals.find(m => m.status === 'planned')
       
       if (plannedMeal) {
-        const mealData = image ? extractMealDataFromMessage(aiResponse, userMessage) : null
+        const mealData = image ? await processMealFromMessage(userMessage, image) : null
         
         const updatedMeal = await updateMeal(plannedMeal.id, {
           status: 'logged',
@@ -253,46 +253,95 @@ async function processIntentAndTakeAction(
   return null
 }
 
-function extractMealDataFromMessage(aiResponse: string, userMessage: string) {
-  // Extract nutritional information from AI response
-  const caloriesMatch = aiResponse.match(/(\d+)\s*(?:calories|cal|kcal)/i)
-  const proteinMatch = aiResponse.match(/(\d+)\s*(?:g|grams?)\s*(?:of\s+)?protein/i)
-  const carbsMatch = aiResponse.match(/(\d+)\s*(?:g|grams?)\s*(?:of\s+)?carb/i)
-  const fatMatch = aiResponse.match(/(\d+)\s*(?:g|grams?)\s*(?:of\s+)?fat/i)
+async function processMealFromMessage(userMessage: string, image?: string) {
+  try {
+    const openai = getOpenAI()
+    
+    // Create a specialized prompt for meal extraction and nutrition calculation
+    const mealProcessingPrompt = `You are a nutrition expert. Extract the food item from the user's message and provide detailed nutritional information.
 
-  // Extract meal name from user message - improved logic
-  let mealName = userMessage
-  const lower = userMessage.toLowerCase()
-  
-  // Remove common prefixes
-  if (lower.startsWith('ate ')) {
-    mealName = userMessage.substring(4)
-  } else if (lower.startsWith('had ')) {
-    mealName = userMessage.substring(4)
-  } else if (lower.startsWith('plan ')) {
-    mealName = userMessage.substring(5)
-  } else if (lower.startsWith('add ')) {
-    mealName = userMessage.substring(4)
-  } else if (lower.startsWith('want ')) {
-    mealName = userMessage.substring(5)
-  } else if (lower.startsWith('having ')) {
-    mealName = userMessage.substring(7)
-  } else if (lower.startsWith('eating ')) {
-    mealName = userMessage.substring(7)
-  } else if (lower.startsWith('log ')) {
-    mealName = userMessage.substring(4)
-  }
-  
-  // Remove meal type suffixes like "for lunch"
-  mealName = mealName.replace(/\s+for\s+(breakfast|lunch|dinner|snack)$/i, '')
-  
-  return {
-    name: mealName.trim(),
-    type: extractMealType(userMessage),
-    calories: caloriesMatch ? parseInt(caloriesMatch[1]) : undefined,
-    protein: proteinMatch ? parseInt(proteinMatch[1]) : undefined,
-    carbs: carbsMatch ? parseInt(carbsMatch[1]) : undefined,
-    fat: fatMatch ? parseInt(fatMatch[1]) : undefined
+User message: "${userMessage}"
+
+Please respond with ONLY a JSON object in this exact format:
+{
+  "foodItem": "extracted food name (e.g., 'tuna', 'banana bread', 'salmon avocado')",
+  "mealType": "breakfast|lunch|dinner|snack or null if not specified",
+  "calories": number (estimated calories for a typical serving),
+  "protein": number (grams of protein),
+  "carbs": number (grams of carbohydrates),
+  "fat": number (grams of fat)
+}
+
+Rules:
+1. Extract ONLY the actual food item, not the entire message
+2. Remove phrases like "lets add", "i had", "for breakfast", etc.
+3. If multiple foods are mentioned, focus on the main item
+4. Provide realistic nutritional values for a typical serving size
+5. If you cannot identify a food item, return null for foodItem
+6. Be conservative with portion estimates (assume standard serving sizes)
+
+Examples:
+- "lets add tuna for breakfast" → {"foodItem": "tuna", "mealType": "breakfast", "calories": 132, "protein": 28, "carbs": 0, "fat": 1}
+- "i had banana bread" → {"foodItem": "banana bread", "mealType": null, "calories": 196, "protein": 3, "carbs": 33, "fat": 6}
+- "salmon avocado" → {"foodItem": "salmon avocado", "mealType": null, "calories": 280, "protein": 25, "carbs": 8, "fat": 18}`
+
+    const messages: any[] = [
+      {
+        role: 'system',
+        content: mealProcessingPrompt
+      }
+    ]
+
+    // Add user message with or without image
+    if (image) {
+      messages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: userMessage },
+          { type: 'image_url', image_url: { url: image } }
+        ]
+      })
+    } else {
+      messages.push({
+        role: 'user',
+        content: userMessage
+      })
+    }
+
+    const response = await openai.chat.completions.create({
+      model: image ? 'gpt-4o' : 'gpt-4o-mini',
+      messages,
+      temperature: 0.1, // Low temperature for consistent extraction
+      max_tokens: 200
+    })
+
+    const content = response.choices[0]?.message?.content
+    if (!content) return null
+
+    // Parse the JSON response
+    try {
+      const mealData = JSON.parse(content.trim())
+      
+      // Validate the response
+      if (!mealData.foodItem) return null
+      
+      return {
+        name: mealData.foodItem,
+        type: mealData.mealType || extractMealType(userMessage),
+        calories: mealData.calories || undefined,
+        protein: mealData.protein || undefined,
+        carbs: mealData.carbs || undefined,
+        fat: mealData.fat || undefined
+      }
+    } catch (parseError) {
+      console.error('Failed to parse meal data JSON:', parseError)
+      console.error('Raw response:', content)
+      return null
+    }
+
+  } catch (error) {
+    console.error('Meal processing error:', error)
+    return null
   }
 }
 
