@@ -7,12 +7,14 @@ import { CustomMealCarousel } from '@/components/custom/CustomMealCarousel'
 import { ChatMessage as ChatMessageComponent } from '@/components/custom/ChatMessage'
 import { ImageUploadButton } from '@/components/custom/ImageUploadButton'
 import { DailyProgress } from '@/components/custom/DailyProgress'
+import { DayNavigation } from '@/components/custom/DayNavigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Send, LogOut, Settings, Target, BookOpen } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useTodaysMeals, useChatMessages, useTodaysDailyTarget, queryKeys } from '@/lib/supabase/client-cache'
+import { useMealsForDate, useChatMessages, useDailyTargetForDate, queryKeys } from '@/lib/supabase/client-cache'
 import { useQueryClient } from '@tanstack/react-query'
+import { getTodayDateString, isToday, isPastDate } from '@/lib/utils/date'
 
 interface MainPageClientProps {
   user: User
@@ -21,10 +23,14 @@ interface MainPageClientProps {
 }
 
 export function MainPageClient({ user, initialMeals, initialMessages }: MainPageClientProps) {
-  // Use React Query for both meals and chat messages with real-time updates
-  const { data: meals = initialMeals } = useTodaysMeals(user.id)
-  const { data: cachedMessages = initialMessages } = useChatMessages(user.id, 20)
-  const { data: dailyTarget } = useTodaysDailyTarget(user.id)
+  // Date navigation state
+  const [selectedDate, setSelectedDate] = useState(getTodayDateString())
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  
+  // Use React Query for date-aware data fetching
+  const { data: meals = [] } = useMealsForDate(user.id, selectedDate)
+  const { data: cachedMessages = [] } = useChatMessages(user.id, selectedDate, 20)
+  const { data: dailyTarget } = useDailyTargetForDate(user.id, selectedDate)
   const queryClient = useQueryClient()
   
   // Use local state for real-time updates, but sync with cached messages
@@ -32,6 +38,9 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  
+  // Check if current date is in the past (read-only mode)
+  const isReadOnly = isPastDate(selectedDate)
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
@@ -51,13 +60,13 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
   }, [messages])
 
   const refreshMeals = async () => {
-    // Use React Query to invalidate and refetch meals data
-    await queryClient.invalidateQueries({ queryKey: queryKeys.todaysMeals(user.id) })
+    // Use React Query to invalidate and refetch meals data for selected date
+    await queryClient.invalidateQueries({ queryKey: queryKeys.mealsForDate(user.id, selectedDate) })
   }
 
   const refreshMessages = async () => {
-    // Use React Query to invalidate and refetch chat messages
-    await queryClient.invalidateQueries({ queryKey: queryKeys.chatMessages(user.id, 20) })
+    // Use React Query to invalidate and refetch chat messages for selected date
+    await queryClient.invalidateQueries({ queryKey: queryKeys.chatMessages(user.id, selectedDate, 20) })
   }
 
   const handleSignOut = async () => {
@@ -138,6 +147,7 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
       user_id: user.id,
       role: 'user',
       content: messageToSend,
+      date: selectedDate,
       created_at: new Date().toISOString()
     }
     setMessages(prev => [...prev, userMessage])
@@ -170,6 +180,7 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
         user_id: user.id,
         role: 'assistant',
         content: '',
+        date: selectedDate,
         created_at: new Date().toISOString()
       }])
 
@@ -226,6 +237,7 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
         user_id: user.id,
         role: 'assistant',
         content: 'Sorry, I encountered an error. Please try again.',
+        date: selectedDate,
         created_at: new Date().toISOString()
       }])
     } finally {

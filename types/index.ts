@@ -49,6 +49,7 @@ export interface ChatMessage {
   user_id: string;
   role: 'user' | 'assistant';
   content: string;
+  date: string; // Date of the chat session (YYYY-MM-DD format)
   created_at: string;
 }
 

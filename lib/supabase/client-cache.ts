@@ -21,8 +21,11 @@ export const queryKeys = {
   user: ['user'] as const,
   preferences: (userId: string) => ['preferences', userId] as const,
   todaysMeals: (userId: string) => ['todaysMeals', userId] as const,
-  chatMessages: (userId: string, limit: number) => ['chatMessages', userId, limit] as const,
+  mealsForDate: (userId: string, date: string) => ['mealsForDate', userId, date] as const,
+  chatMessages: (userId: string, date: string, limit: number) => ['chatMessages', userId, date, limit] as const,
   dailyTarget: (userId: string) => ['dailyTarget', userId] as const,
+  dailyTargetForDate: (userId: string, date: string) => ['dailyTargetForDate', userId, date] as const,
+  userDays: (userId: string) => ['userDays', userId] as const,
   brands: ['brands'] as const,
   savedItems: (userId: string) => ['savedItems', userId] as const,
   supplementSchedules: (userId: string) => ['supplementSchedules', userId] as const,
@@ -73,11 +76,15 @@ export function useUserPreferences(userId: string) {
 }
 
 export function useTodaysMeals(userId: string) {
+  const today = new Date().toISOString().split('T')[0]
+  return useMealsForDate(userId, today)
+}
+
+export function useMealsForDate(userId: string, date: string) {
   return useQuery({
-    queryKey: queryKeys.todaysMeals(userId),
+    queryKey: queryKeys.mealsForDate(userId, date),
     queryFn: async (): Promise<MealWithItems[]> => {
       const supabase = getSupabaseClient()
-      const today = new Date().toISOString().split('T')[0]
       
       const { data: meals } = await supabase
         .from('meals')
@@ -86,49 +93,54 @@ export function useTodaysMeals(userId: string) {
           meal_items (*)
         `)
         .eq('user_id', userId)
-        .eq('date', today)
+        .eq('date', date)
         .order('logged_at', { ascending: true })
 
       return meals || []
     },
-    enabled: !!userId,
+    enabled: !!userId && !!date,
     staleTime: 30 * 1000, // 30 seconds (meals change frequently)
     gcTime: 2 * 60 * 1000, // 2 minutes
   })
 }
 
-export function useChatMessages(userId: string, limit: number = 10) {
+export function useChatMessages(userId: string, date: string, limit: number = 10) {
   return useQuery({
-    queryKey: queryKeys.chatMessages(userId, limit),
+    queryKey: queryKeys.chatMessages(userId, date, limit),
     queryFn: async (): Promise<ChatMessage[]> => {
       const supabase = getSupabaseClient()
       const { data: messages } = await supabase
         .from('chat_messages')
         .select('*')
         .eq('user_id', userId)
+        .eq('date', date)
         .order('created_at', { ascending: false })
         .limit(limit)
 
       return (messages || []).reverse()
     },
-    enabled: !!userId,
+    enabled: !!userId && !!date,
     staleTime: 1 * 60 * 1000, // 1 minute
     gcTime: 3 * 60 * 1000, // 3 minutes
   })
 }
 
 export function useTodaysDailyTarget(userId: string, options?: { enabled?: boolean }) {
+  const today = new Date().toISOString().split('T')[0]
+  return useDailyTargetForDate(userId, today, options)
+}
+
+export function useDailyTargetForDate(userId: string, date: string, options?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: queryKeys.dailyTarget(userId),
+    queryKey: queryKeys.dailyTargetForDate(userId, date),
     queryFn: async (): Promise<DailyTarget | null> => {
       const supabase = getSupabaseClient()
-      const today = new Date().toISOString().split('T')[0]
       
       const { data: target } = await supabase
         .from('daily_targets')
         .select('*')
         .eq('user_id', userId)
-        .eq('date', today)
+        .eq('date', date)
         .eq('is_accepted', true)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -136,9 +148,45 @@ export function useTodaysDailyTarget(userId: string, options?: { enabled?: boole
 
       return target
     },
-    enabled: (options?.enabled ?? true) && !!userId,
+    enabled: (options?.enabled ?? true) && !!userId && !!date,
     staleTime: 5 * 60 * 1000, // 5 minutes (targets don't change often)
     gcTime: 10 * 60 * 1000, // 10 minutes
+  })
+}
+
+export function useUserDays(userId: string) {
+  return useQuery({
+    queryKey: queryKeys.userDays(userId),
+    queryFn: async (): Promise<string[]> => {
+      const supabase = getSupabaseClient()
+      
+      // Get unique dates from meals and chat_messages
+      const [mealsResult, chatResult] = await Promise.all([
+        supabase
+          .from('meals')
+          .select('date')
+          .eq('user_id', userId)
+          .order('date', { ascending: false }),
+        supabase
+          .from('chat_messages')
+          .select('date')
+          .eq('user_id', userId)
+          .order('date', { ascending: false })
+      ])
+
+      const mealDates = new Set(mealsResult.data?.map((m: any) => m.date as string) || [])
+      const chatDates = new Set(chatResult.data?.map((c: any) => c.date as string) || [])
+      
+      // Combine and deduplicate dates
+      const allDates = new Set([...mealDates, ...chatDates])
+      
+      // Convert to array and sort (most recent first)
+      const datesArray: string[] = Array.from(allDates) as string[]
+      return datesArray.sort((a, b) => b.localeCompare(a))
+    },
+    enabled: !!userId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes
   })
 }
 
@@ -248,18 +296,22 @@ export function useAddChatMessage() {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: async ({ userId, role, content }: {
+    mutationFn: async ({ userId, role, content, date }: {
       userId: string
       role: 'user' | 'assistant'
       content: string
+      date?: string // Optional, defaults to today
     }) => {
       const supabase = getSupabaseClient()
+      const messageDate = date || new Date().toISOString().split('T')[0]
+      
       const { data: message } = await supabase
         .from('chat_messages')
         .insert({
           user_id: userId,
           role,
-          content
+          content,
+          date: messageDate
         })
         .select()
         .single()
@@ -267,8 +319,11 @@ export function useAddChatMessage() {
       return message
     },
     onSuccess: (_data, variables) => {
-      // Invalidate and refetch chat messages
-      queryClient.invalidateQueries({ queryKey: queryKeys.chatMessages(variables.userId, 20) })
+      // Invalidate and refetch chat messages for the message date
+      const messageDate = variables.date || new Date().toISOString().split('T')[0]
+      queryClient.invalidateQueries({ queryKey: queryKeys.chatMessages(variables.userId, messageDate, 20) })
+      // Also invalidate user days to update the sidebar
+      queryClient.invalidateQueries({ queryKey: queryKeys.userDays(variables.userId) })
     },
   })
 }
