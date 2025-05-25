@@ -1,18 +1,18 @@
 'use client'
 
-import { useState } from 'react'
-import { Brand } from '@/types'
+import { useState, useEffect } from 'react'
+import { Brand, SavedItem } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { TagInput } from '@/components/ui/tag-input'
 import { BrandInput } from '@/components/ui/brand-input'
-import { useCreateSavedItem } from '@/lib/supabase/client-cache'
+import { useUpdateSavedItem } from '@/lib/supabase/client-cache'
 
-interface CreateSavedItemModalProps {
+interface EditSavedItemModalProps {
   isOpen: boolean
   onClose: () => void
-  userId: string
+  item: SavedItem | null
   brands: Brand[]
 }
 
@@ -31,10 +31,10 @@ const COMMON_ALLERGENS = [
   'sesame', 'gluten', 'dairy', 'lactose', 'casein', 'whey'
 ]
 
-export function CreateSavedItemModal({ isOpen, onClose, userId, brands }: CreateSavedItemModalProps) {
+export function EditSavedItemModal({ isOpen, onClose, item, brands }: EditSavedItemModalProps) {
   const [formData, setFormData] = useState({
     name: '',
-    category: 'meal' as const,
+    category: 'meal' as SavedItem['category'],
     brand_id: '',
     brand_name: '',
     serving_size: '',
@@ -47,11 +47,33 @@ export function CreateSavedItemModal({ isOpen, onClose, userId, brands }: Create
     allergens: [] as string[]
   })
 
-  const createSavedItem = useCreateSavedItem()
+  const updateSavedItem = useUpdateSavedItem()
+
+  // Populate form when item changes
+  useEffect(() => {
+    if (item) {
+      setFormData({
+        name: item.name || '',
+        category: item.category || 'meal',
+        brand_id: item.brand_id || '',
+        brand_name: item.brand?.name || '',
+        serving_size: item.serving_size || '',
+        kcal_per_serving: item.kcal_per_serving?.toString() || '',
+        g_protein_per_serving: item.g_protein_per_serving?.toString() || '',
+        g_carb_per_serving: item.g_carb_per_serving?.toString() || '',
+        g_fat_per_serving: item.g_fat_per_serving?.toString() || '',
+        notes: item.notes || '',
+        ingredients: item.ingredients || [],
+        allergens: item.allergens || []
+      })
+    }
+  }, [item])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    if (!item) return
+
     const itemData = {
       name: formData.name,
       category: formData.category,
@@ -67,37 +89,23 @@ export function CreateSavedItemModal({ isOpen, onClose, userId, brands }: Create
     }
 
     try {
-      console.log('Creating saved item with data:', { userId, itemData })
-      const result = await createSavedItem.mutateAsync({ userId, itemData })
-      console.log('Saved item created successfully:', result)
+      console.log('Updating saved item with data:', { itemId: item.id, itemData })
+      const result = await updateSavedItem.mutateAsync({ itemId: item.id, itemData })
+      console.log('Saved item updated successfully:', result)
       onClose()
-      setFormData({
-        name: '',
-        category: 'meal',
-        brand_id: '',
-        brand_name: '',
-        serving_size: '',
-        kcal_per_serving: '',
-        g_protein_per_serving: '',
-        g_carb_per_serving: '',
-        g_fat_per_serving: '',
-        notes: '',
-        ingredients: [],
-        allergens: []
-      })
     } catch (error) {
-      console.error('Error creating saved item:', error)
-      alert('Error creating saved item: ' + (error as Error).message)
+      console.error('Error updating saved item:', error)
+      alert('Error updating saved item: ' + (error as Error).message)
     }
   }
 
-  if (!isOpen) return null
+  if (!isOpen || !item) return null
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Add Saved Item</h2>
+          <h2 className="text-lg font-semibold">Edit Saved Item</h2>
           <Button variant="ghost" size="sm" onClick={onClose}>
             ✕
           </Button>
@@ -244,9 +252,9 @@ export function CreateSavedItemModal({ isOpen, onClose, userId, brands }: Create
             <Button 
               type="submit" 
               className="flex-1"
-              disabled={createSavedItem.isPending || !formData.name}
+              disabled={updateSavedItem.isPending || !formData.name}
             >
-              {createSavedItem.isPending ? 'Creating...' : 'Create Item'}
+              {updateSavedItem.isPending ? 'Updating...' : 'Update Item'}
             </Button>
           </div>
         </form>

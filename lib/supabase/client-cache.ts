@@ -303,8 +303,9 @@ export function useCreateSavedItem() {
       userId: string
       itemData: Omit<SavedItem, 'id' | 'user_id' | 'times_used' | 'created_at' | 'updated_at'>
     }) => {
+      console.log('useCreateSavedItem mutation called with:', { userId, itemData })
       const supabase = getSupabaseClient()
-      const { data: item } = await supabase
+      const { data: item, error } = await supabase
         .from('saved_items')
         .insert({
           user_id: userId,
@@ -317,11 +318,91 @@ export function useCreateSavedItem() {
         `)
         .single()
 
+      if (error) {
+        console.error('Supabase error creating saved item:', error)
+        throw error
+      }
+
+      console.log('Saved item created in database:', item)
       return item
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: (data, variables) => {
+      console.log('useCreateSavedItem onSuccess called, invalidating queries for userId:', variables.userId)
       queryClient.invalidateQueries({ queryKey: queryKeys.savedItems(variables.userId) })
     },
+    onError: (error) => {
+      console.error('useCreateSavedItem onError called:', error)
+    }
+  })
+}
+
+export function useUpdateSavedItem() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ itemId, itemData }: {
+      itemId: string
+      itemData: Partial<Omit<SavedItem, 'id' | 'user_id' | 'times_used' | 'created_at' | 'updated_at'>>
+    }) => {
+      console.log('useUpdateSavedItem mutation called with:', { itemId, itemData })
+      const supabase = getSupabaseClient()
+      const { data: item, error } = await supabase
+        .from('saved_items')
+        .update(itemData)
+        .eq('id', itemId)
+        .select(`
+          *,
+          brand:brands(*)
+        `)
+        .single()
+
+      if (error) {
+        console.error('Supabase error updating saved item:', error)
+        throw error
+      }
+
+      console.log('Saved item updated in database:', item)
+      return item
+    },
+    onSuccess: (data) => {
+      console.log('useUpdateSavedItem onSuccess called, invalidating queries for user')
+      // Invalidate saved items for all users since we don't have userId here
+      queryClient.invalidateQueries({ queryKey: ['savedItems'] })
+    },
+    onError: (error) => {
+      console.error('useUpdateSavedItem onError called:', error)
+    }
+  })
+}
+
+export function useDeleteSavedItem() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async (itemId: string) => {
+      console.log('useDeleteSavedItem mutation called with itemId:', itemId)
+      const supabase = getSupabaseClient()
+      const { error } = await supabase
+        .from('saved_items')
+        .delete()
+        .eq('id', itemId)
+
+      if (error) {
+        console.error('Supabase error deleting saved item:', error)
+        throw error
+      }
+
+      console.log('Saved item deleted from database')
+      return true
+    },
+    onSuccess: () => {
+      console.log('useDeleteSavedItem onSuccess called, invalidating queries')
+      // Invalidate saved items for all users since we don't have userId here
+      queryClient.invalidateQueries({ queryKey: ['savedItems'] })
+    },
+    onError: (error) => {
+      console.error('useDeleteSavedItem onError called:', error)
+    }
   })
 }
 

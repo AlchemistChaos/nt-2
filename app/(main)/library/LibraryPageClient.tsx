@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { User } from '@/types'
+import { User, SavedItem } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation'
 import { useSavedItems, useBrands, useSupplementSchedules } from '@/lib/supabase/client-cache'
 import { SavedItemCard } from '@/components/custom/SavedItemCard'
 import { CreateSavedItemModal } from '@/components/custom/CreateSavedItemModal'
+import { EditSavedItemModal } from '@/components/custom/EditSavedItemModal'
 import { CreateBrandModal } from '@/components/custom/CreateBrandModal'
 
 interface LibraryPageClientProps {
@@ -23,6 +24,8 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [showCreateItemModal, setShowCreateItemModal] = useState(false)
   const [showCreateBrandModal, setShowCreateBrandModal] = useState(false)
+  const [showEditItemModal, setShowEditItemModal] = useState(false)
+  const [editingItem, setEditingItem] = useState<SavedItem | null>(null)
   const [activeTab, setActiveTab] = useState('items')
 
   // Fetch data using React Query
@@ -67,6 +70,16 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
       default:
         return 'bg-gray-100 text-gray-800'
     }
+  }
+
+  const handleEditItem = (item: SavedItem) => {
+    setEditingItem(item)
+    setShowEditItemModal(true)
+  }
+
+  const handleCloseEditModal = () => {
+    setShowEditItemModal(false)
+    setEditingItem(null)
   }
 
   return (
@@ -168,6 +181,8 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
                   <SavedItemCard
                     key={item.id}
                     item={item}
+                    brands={brands}
+                    onEdit={handleEditItem}
                     onItemUpdated={() => {
                       // React Query will automatically refetch
                     }}
@@ -296,6 +311,13 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
       <CreateBrandModal
         isOpen={showCreateBrandModal}
         onClose={() => setShowCreateBrandModal(false)}
+      />
+
+      <EditSavedItemModal
+        isOpen={showEditItemModal}
+        onClose={handleCloseEditModal}
+        item={editingItem}
+        brands={brands}
       />
     </div>
   )

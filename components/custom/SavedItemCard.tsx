@@ -1,17 +1,23 @@
 'use client'
 
-import { SavedItem } from '@/types'
+import { useState } from 'react'
+import { SavedItem, Brand } from '@/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Utensils, Pill, Package, Edit, Trash2, Clock } from 'lucide-react'
+import { useDeleteSavedItem } from '@/lib/supabase/client-cache'
 
 interface SavedItemCardProps {
   item: SavedItem
+  brands: Brand[]
   onItemUpdated: () => void
+  onEdit: (item: SavedItem) => void
 }
 
-export function SavedItemCard({ item, onItemUpdated }: SavedItemCardProps) {
+export function SavedItemCard({ item, brands, onItemUpdated, onEdit }: SavedItemCardProps) {
+  const [isDeleting, setIsDeleting] = useState(false)
+  const deleteSavedItem = useDeleteSavedItem()
   const getCategoryIcon = (category: string) => {
     switch (category) {
       case 'meal':
@@ -50,6 +56,27 @@ export function SavedItemCard({ item, onItemUpdated }: SavedItemCardProps) {
     return parts.join(' • ')
   }
 
+  const handleEdit = () => {
+    onEdit(item)
+  }
+
+  const handleDelete = async () => {
+    if (isDeleting) return
+    
+    if (confirm(`Are you sure you want to delete "${item.name}"? This action cannot be undone.`)) {
+      setIsDeleting(true)
+      try {
+        await deleteSavedItem.mutateAsync(item.id)
+        onItemUpdated()
+      } catch (error) {
+        console.error('Error deleting saved item:', error)
+        alert('Error deleting saved item: ' + (error as Error).message)
+      } finally {
+        setIsDeleting(false)
+      }
+    }
+  }
+
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardHeader className="pb-3">
@@ -59,10 +86,23 @@ export function SavedItemCard({ item, onItemUpdated }: SavedItemCardProps) {
             <CardTitle className="text-lg">{item.name}</CardTitle>
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-8 w-8 p-0"
+              onClick={handleEdit}
+              title="Edit item"
+            >
               <Edit className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              title="Delete item"
+            >
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
