@@ -1,4 +1,4 @@
-import { getCurrentUser, getLatestBiometric, getActiveGoal, getTodaysDailyTarget } from '@/lib/supabase/database'
+import { getCurrentUser } from '@/lib/supabase/database'
 import { GoalsPageClient } from './GoalsPageClient'
 import { redirect } from 'next/navigation'
 
@@ -11,11 +11,10 @@ export default async function GoalsPage() {
     redirect('/login')
   }
 
-  const [latestBiometric, activeGoal, todayTarget] = await Promise.all([
-    getLatestBiometric(user.id),
-    getActiveGoal(user.id),
-    getTodaysDailyTarget(user.id)
-  ])
+  // For now, use null values until we run the database migration
+  const latestBiometric = null
+  const activeGoal = null
+  const todayTarget = null
 
   return (
     <GoalsPageClient 

@@ -98,4 +98,21 @@ export async function addDailyTargetClient(
     .single()
 
   return target
+}
+
+export async function getTodaysDailyTargetClient(userId: string): Promise<DailyTarget | null> {
+  const supabase = createClient()
+  const today = new Date().toISOString().split('T')[0]
+  
+  const { data: target } = await supabase
+    .from('daily_targets')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('date', today)
+    .eq('is_accepted', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  return target
 } 

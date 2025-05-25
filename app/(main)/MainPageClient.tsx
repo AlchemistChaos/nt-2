@@ -6,11 +6,12 @@ import { User, MealWithItems, ChatMessage } from '@/types'
 import { CustomMealCarousel } from '@/components/custom/CustomMealCarousel'
 import { ChatMessage as ChatMessageComponent } from '@/components/custom/ChatMessage'
 import { ImageUploadButton } from '@/components/custom/ImageUploadButton'
+import { DailyProgress } from '@/components/custom/DailyProgress'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Send, LogOut, Settings, Target } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useTodaysMeals, useChatMessages, queryKeys } from '@/lib/supabase/client-cache'
+import { useTodaysMeals, useChatMessages, useTodaysDailyTarget, queryKeys } from '@/lib/supabase/client-cache'
 import { useQueryClient } from '@tanstack/react-query'
 
 interface MainPageClientProps {
@@ -23,6 +24,7 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
   // Use React Query for both meals and chat messages with real-time updates
   const { data: meals = initialMeals } = useTodaysMeals(user.id)
   const { data: cachedMessages = initialMessages } = useChatMessages(user.id, 20)
+  const { data: dailyTarget } = useTodaysDailyTarget(user.id)
   const queryClient = useQueryClient()
   
   // Use local state for real-time updates, but sync with cached messages
@@ -226,6 +228,13 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
             onMealUpdated={refreshMeals}
             onMealDeleted={refreshMeals}
           />
+        </div>
+      </div>
+
+      {/* Daily Progress Section */}
+      <div className="bg-gray-50 w-full">
+        <div className="max-w-7xl mx-auto p-6">
+          <DailyProgress meals={meals} dailyTarget={dailyTarget || null} />
         </div>
       </div>
 

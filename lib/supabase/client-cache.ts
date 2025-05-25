@@ -1,6 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { User, Preference, MealWithItems, ChatMessage } from '@/types'
+import { User, Preference, MealWithItems, ChatMessage, DailyTarget } from '@/types'
 
 // Create a singleton Supabase client for browser use
 let supabaseClient: ReturnType<typeof createBrowserClient> | null = null
@@ -22,6 +22,7 @@ export const queryKeys = {
   preferences: (userId: string) => ['preferences', userId] as const,
   todaysMeals: (userId: string) => ['todaysMeals', userId] as const,
   chatMessages: (userId: string, limit: number) => ['chatMessages', userId, limit] as const,
+  dailyTarget: (userId: string) => ['dailyTarget', userId] as const,
 }
 
 // Client-side data fetching hooks with caching
@@ -108,6 +109,31 @@ export function useChatMessages(userId: string, limit: number = 10) {
     enabled: !!userId,
     staleTime: 1 * 60 * 1000, // 1 minute
     gcTime: 3 * 60 * 1000, // 3 minutes
+  })
+}
+
+export function useTodaysDailyTarget(userId: string) {
+  return useQuery({
+    queryKey: queryKeys.dailyTarget(userId),
+    queryFn: async (): Promise<DailyTarget | null> => {
+      const supabase = getSupabaseClient()
+      const today = new Date().toISOString().split('T')[0]
+      
+      const { data: target } = await supabase
+        .from('daily_targets')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('date', today)
+        .eq('is_accepted', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      return target
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000, // 5 minutes (targets don't change often)
+    gcTime: 10 * 60 * 1000, // 10 minutes
   })
 }
 
