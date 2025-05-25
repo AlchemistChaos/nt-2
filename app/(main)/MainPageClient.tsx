@@ -14,7 +14,7 @@ import { Send, LogOut, Settings, Target, BookOpen } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useMealsForDate, useChatMessages, useDailyTargetForDate, queryKeys } from '@/lib/supabase/client-cache'
 import { useQueryClient } from '@tanstack/react-query'
-import { getTodayDateString, isToday, isPastDate, formatDateForDisplay } from '@/lib/utils/date'
+import { getTodayDateString, isPastDate, formatDateForDisplay } from '@/lib/utils/date'
 
 interface MainPageClientProps {
   user: User
@@ -22,7 +22,7 @@ interface MainPageClientProps {
   initialMessages: ChatMessage[]
 }
 
-export function MainPageClient({ user, initialMeals, initialMessages }: MainPageClientProps) {
+export function MainPageClient({ user }: MainPageClientProps) {
   // Date navigation state
   const [selectedDate, setSelectedDate] = useState(getTodayDateString())
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -362,7 +362,7 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
                 <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-yellow-800">
-                      📅 You're viewing {formatDateForDisplay(selectedDate)}. You can view past data but cannot send new messages.
+                      📅 You&apos;re viewing {formatDateForDisplay(selectedDate)}. You can view past data but cannot send new messages.
                     </span>
                   </div>
                 </div>

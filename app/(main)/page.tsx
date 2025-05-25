@@ -8,9 +8,9 @@ import { getTodayDateString } from '@/lib/utils/date'
 
 export default function OptimizedMainPage() {
   const { data: user, isLoading: userLoading, error: userError } = useCurrentUser()
-  const { data: todaysMeals = [], isLoading: mealsLoading } = useTodaysMeals(user?.id || '')
+  const { data: todaysMeals = [] } = useTodaysMeals(user?.id || '')
   const today = getTodayDateString()
-  const { data: chatMessages = [], isLoading: messagesLoading } = useChatMessages(user?.id || '', today, 20)
+  const { data: chatMessages = [] } = useChatMessages(user?.id || '', today, 20)
 
   // Handle authentication redirect
   useEffect(() => {

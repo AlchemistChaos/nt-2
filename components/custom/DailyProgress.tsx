@@ -57,9 +57,6 @@ export function DailyProgress({ meals, dailyTarget }: DailyProgressProps) {
 
   // Calculate progress percentages
   const calorieProgress = dailyTarget.calories_target ? (totals.calories / dailyTarget.calories_target) * 100 : 0
-  const proteinProgress = dailyTarget.protein_target ? (totals.protein / dailyTarget.protein_target) * 100 : 0
-  const carbsProgress = dailyTarget.carbs_target ? (totals.carbs / dailyTarget.carbs_target) * 100 : 0
-  const fatProgress = dailyTarget.fat_target ? (totals.fat / dailyTarget.fat_target) * 100 : 0
 
   const ProgressBar = ({ current, target, label, color = 'blue' }: {
     current: number
