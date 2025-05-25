@@ -85,6 +85,42 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
     })
   }
 
+  const handlePrefetchGoals = () => {
+    // Prefetch goals data when user hovers over goals button
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.latestBiometric(user.id),
+      queryFn: async () => {
+        const supabase = createClient()
+        const { data: biometric } = await supabase
+          .from('biometrics')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('recorded_at', { ascending: false })
+          .limit(1)
+          .single()
+        return biometric
+      },
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    })
+
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.activeGoal(user.id),
+      queryFn: async () => {
+        const supabase = createClient()
+        const { data: goal } = await supabase
+          .from('goals')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+        return goal
+      },
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    })
+  }
+
   const handleSendMessage = async () => {
     if (!inputMessage.trim() && !selectedImage) return
 
@@ -228,6 +264,7 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
               size="icon"
               onClick={() => router.push('/goals')}
               title="Goals & Profile"
+              onMouseEnter={handlePrefetchGoals}
             >
               <Target className="h-5 w-5" />
             </Button>

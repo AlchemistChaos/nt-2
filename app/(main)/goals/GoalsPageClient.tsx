@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { User, Biometric, Goal, DailyTarget, CalorieRecommendation } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -10,19 +10,20 @@ import { Input } from '@/components/ui/input'
 import { ArrowLeft, Target, TrendingUp, Calculator, Check, AlertCircle } from 'lucide-react'
 import { calculateNutritionRecommendations, canCalculateRecommendations, createUserProfile } from '@/lib/nutrition/recommendations'
 import { addBiometricClient, addGoalClient, addDailyTargetClient } from '@/lib/supabase/database-client'
+import { useLatestBiometric, useActiveGoal, useTodaysDailyTarget } from '@/lib/supabase/client-cache'
 
 interface GoalsPageClientProps {
   user: User
-  initialBiometric: Biometric | null
-  initialGoal: Goal | null
-  initialDailyTarget: DailyTarget | null
 }
 
-export function GoalsPageClient({ user, initialBiometric, initialGoal, initialDailyTarget }: GoalsPageClientProps) {
+export function GoalsPageClient({ user }: GoalsPageClientProps) {
   const router = useRouter()
-  const [biometric, setBiometric] = useState(initialBiometric)
-  const [goal, setGoal] = useState(initialGoal)
-  const [dailyTarget, setDailyTarget] = useState(initialDailyTarget)
+  
+  // Use React Query hooks for data fetching
+  const { data: biometric, isLoading: biometricLoading } = useLatestBiometric(user.id)
+  const { data: goal, isLoading: goalLoading } = useActiveGoal(user.id)
+  const { data: dailyTarget, isLoading: dailyTargetLoading } = useTodaysDailyTarget(user.id)
+  
   const [recommendations, setRecommendations] = useState<CalorieRecommendation | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   
@@ -46,6 +47,40 @@ export function GoalsPageClient({ user, initialBiometric, initialGoal, initialDa
     activityLevel: 'moderately_active'
   })
 
+  // Update form states when data loads
+  useEffect(() => {
+    if (biometric) {
+      setBiometricForm({
+        weight_kg: biometric.weight_kg?.toString() || '',
+        height_cm: biometric.height_cm?.toString() || '',
+        body_fat_percentage: biometric.body_fat_percentage?.toString() || ''
+      })
+    }
+  }, [biometric])
+
+  useEffect(() => {
+    if (goal) {
+      setGoalForm({
+        goal_type: goal.goal_type || 'maintenance',
+        target_weight_kg: goal.target_weight_kg?.toString() || '',
+        target_body_fat_percentage: goal.target_body_fat_percentage?.toString() || '',
+        target_date: goal.target_date || ''
+      })
+    }
+  }, [goal])
+
+  // Show loading state while fetching data
+  if (biometricLoading || goalLoading || dailyTargetLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your goals and biometrics...</p>
+        </div>
+      </div>
+    )
+  }
+
   const handleBiometricSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -59,7 +94,7 @@ export function GoalsPageClient({ user, initialBiometric, initialGoal, initialDa
       })
       
       if (newBiometric) {
-        setBiometric(newBiometric)
+        // Update biometric state
       }
     } catch (error) {
       console.error('Error saving biometric:', error)
@@ -82,7 +117,7 @@ export function GoalsPageClient({ user, initialBiometric, initialGoal, initialDa
       })
       
       if (newGoal) {
-        setGoal(newGoal)
+        // Update goal state
       }
     } catch (error) {
       console.error('Error saving goal:', error)
@@ -127,7 +162,7 @@ export function GoalsPageClient({ user, initialBiometric, initialGoal, initialDa
       })
       
       if (newTarget) {
-        setDailyTarget(newTarget)
+        // Update dailyTarget state
       }
     } catch (error) {
       console.error('Error accepting recommendations:', error)
@@ -136,7 +171,7 @@ export function GoalsPageClient({ user, initialBiometric, initialGoal, initialDa
     }
   }
 
-  const canCalculate = canCalculateRecommendations(biometric, goal)
+  const canCalculate = canCalculateRecommendations(biometric || null, goal || null)
 
   return (
     <div className="min-h-screen bg-gray-50">

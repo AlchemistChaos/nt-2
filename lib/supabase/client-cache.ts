@@ -1,6 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { User, Preference, MealWithItems, ChatMessage, DailyTarget, Brand, SavedItem, SupplementSchedule } from '@/types'
+import { User, Preference, MealWithItems, ChatMessage, DailyTarget, Brand, SavedItem, SupplementSchedule, Biometric, Goal } from '@/types'
 
 // Create a singleton Supabase client for browser use
 let supabaseClient: ReturnType<typeof createBrowserClient> | null = null
@@ -26,6 +26,8 @@ export const queryKeys = {
   brands: ['brands'] as const,
   savedItems: (userId: string) => ['savedItems', userId] as const,
   supplementSchedules: (userId: string) => ['supplementSchedules', userId] as const,
+  latestBiometric: (userId: string) => ['latestBiometric', userId] as const,
+  activeGoal: (userId: string) => ['activeGoal', userId] as const,
 }
 
 // Client-side data fetching hooks with caching
@@ -115,7 +117,7 @@ export function useChatMessages(userId: string, limit: number = 10) {
   })
 }
 
-export function useTodaysDailyTarget(userId: string) {
+export function useTodaysDailyTarget(userId: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.dailyTarget(userId),
     queryFn: async (): Promise<DailyTarget | null> => {
@@ -134,8 +136,51 @@ export function useTodaysDailyTarget(userId: string) {
 
       return target
     },
-    enabled: !!userId,
+    enabled: (options?.enabled ?? true) && !!userId,
     staleTime: 5 * 60 * 1000, // 5 minutes (targets don't change often)
+    gcTime: 10 * 60 * 1000, // 10 minutes
+  })
+}
+
+export function useLatestBiometric(userId: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.latestBiometric(userId),
+    queryFn: async (): Promise<Biometric | null> => {
+      const supabase = getSupabaseClient()
+      const { data: biometric } = await supabase
+        .from('biometrics')
+        .select('*')
+        .eq('user_id', userId)
+        .order('recorded_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      return biometric
+    },
+    enabled: (options?.enabled ?? true) && !!userId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+  })
+}
+
+export function useActiveGoal(userId: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.activeGoal(userId),
+    queryFn: async (): Promise<Goal | null> => {
+      const supabase = getSupabaseClient()
+      const { data: goal } = await supabase
+        .from('goals')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      return goal
+    },
+    enabled: (options?.enabled ?? true) && !!userId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
   })
 }
