@@ -14,6 +14,12 @@ import { getMealTypeFromTime } from '@/lib/utils'
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if OpenAI API key is configured
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OpenAI API key is not configured')
+      return NextResponse.json({ error: 'OpenAI API key not configured' }, { status: 500 })
+    }
+
     const { message, image } = await request.json()
 
     // Get current user
@@ -85,13 +91,19 @@ ${recentMessages.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n')}`
 
     // Create streaming response
     const openai = getOpenAI()
-    const stream = await openai.chat.completions.create({
-      model: image ? 'gpt-4o' : 'gpt-4o-mini',
-      messages,
-      stream: true,
-      temperature: 0.7,
-      max_tokens: 1000
-    })
+    let stream
+    try {
+      stream = await openai.chat.completions.create({
+        model: image ? 'gpt-4o' : 'gpt-4o-mini',
+        messages,
+        stream: true,
+        temperature: 0.7,
+        max_tokens: 1000
+      })
+    } catch (openaiError) {
+      console.error('OpenAI API error:', openaiError)
+      return NextResponse.json({ error: 'Failed to connect to OpenAI API' }, { status: 500 })
+    }
 
     // Create readable stream for response
     const encoder = new TextEncoder()
@@ -256,6 +268,12 @@ async function processIntentAndTakeAction(
 
 async function processMealFromMessage(userMessage: string, image?: string) {
   try {
+    // Check if OpenAI API key is available
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OpenAI API key not configured for meal processing')
+      return null
+    }
+
     const openai = getOpenAI()
     
     // Create a specialized prompt for meal extraction and nutrition calculation
