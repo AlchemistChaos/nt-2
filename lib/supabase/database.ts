@@ -101,6 +101,17 @@ export async function updateMeal(
   return meal
 }
 
+export async function deleteMeal(mealId: string): Promise<boolean> {
+  const supabase = await createClient()
+  
+  const { error } = await supabase
+    .from('meals')
+    .delete()
+    .eq('id', mealId)
+
+  return !error
+}
+
 export async function addMealItems(
   mealId: string,
   items: Omit<MealItem, 'id' | 'meal_id' | 'created_at'>[]

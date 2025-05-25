@@ -154,16 +154,44 @@ async function processIntentAndTakeAction(
   const lowerMessage = userMessage.toLowerCase()
 
   try {
-    // Intent: Log a meal (expanded triggers)
+    // Intent: Update preference (CHECK THIS FIRST!)
+    if (lowerMessage.includes('allergic') || lowerMessage.includes('allergy') || 
+        lowerMessage.includes('vegetarian') || lowerMessage.includes('vegan') ||
+        lowerMessage.includes('avoid') || lowerMessage.includes('restriction') ||
+        lowerMessage.includes('negative preference') || lowerMessage.includes('dislike') ||
+        (lowerMessage.includes('add') && lowerMessage.includes('preference')) ||
+        (lowerMessage.includes('add') && (lowerMessage.includes('negative') || lowerMessage.includes('dislike'))) ||
+        lowerMessage.includes('makes me feel bad') || lowerMessage.includes('feel bad') ||
+        lowerMessage.includes('dont like') || lowerMessage.includes("don't like") ||
+        lowerMessage.includes('not a fan') || lowerMessage.includes('hate') ||
+        lowerMessage.includes('cant stand') || lowerMessage.includes("can't stand")
+    ) {
+      console.log('Processing preference update:', userMessage) // Debug log
+      const preferenceData = extractPreferenceFromMessage(userMessage)
+      if (preferenceData) {
+        console.log('Preference data extracted:', preferenceData) // Debug log
+        const preference = await addUserPreference(
+          userId,
+          preferenceData.type,
+          preferenceData.foodName,
+          preferenceData.notes
+        )
+
+        console.log('Preference added successfully:', preference) // Debug log
+        return { type: 'preference_updated', data: preference }
+      }
+    }
+
+    // Intent: Log a meal (expanded triggers) - CHECK AFTER PREFERENCES
     if (image || 
         lowerMessage.includes('ate') || 
         lowerMessage.includes('had') || 
         lowerMessage.includes('consumed') ||
-        lowerMessage.includes('add') ||
+        (lowerMessage.includes('add') && !lowerMessage.includes('preference') && !lowerMessage.includes('negative')) ||
         lowerMessage.includes('want') ||
         lowerMessage.includes('having') ||
         lowerMessage.includes('eating') ||
-        lowerMessage.includes('log') ||
+        (lowerMessage.includes('log') && !lowerMessage.includes('preference')) ||
         (lowerMessage.includes('for') && (lowerMessage.includes('lunch') || lowerMessage.includes('breakfast') || lowerMessage.includes('dinner') || lowerMessage.includes('snack')))
     ) {
       const mealData = extractMealDataFromMessage(aiResponse, userMessage)
@@ -195,24 +223,6 @@ async function processIntentAndTakeAction(
         })
 
         return { type: 'meal_planned', data: meal }
-      }
-    }
-
-    // Intent: Update preference
-    if (lowerMessage.includes('allergic') || lowerMessage.includes('allergy') || 
-        lowerMessage.includes('vegetarian') || lowerMessage.includes('vegan') ||
-        lowerMessage.includes('avoid') || lowerMessage.includes('restriction')) {
-      
-      const preferenceData = extractPreferenceFromMessage(userMessage)
-      if (preferenceData) {
-        const preference = await addUserPreference(
-          userId,
-          preferenceData.type,
-          preferenceData.foodName,
-          preferenceData.notes
-        )
-
-        return { type: 'preference_updated', data: preference }
       }
     }
 
@@ -298,6 +308,7 @@ function extractMealType(message: string): string | undefined {
 function extractPreferenceFromMessage(message: string) {
   const lower = message.toLowerCase()
   
+  // Handle allergies
   if (lower.includes('allergic') || lower.includes('allergy')) {
     const allergenMatch = message.match(/allergic to ([^.]+)/i) || message.match(/allergy to ([^.]+)/i)
     if (allergenMatch) {
@@ -309,6 +320,70 @@ function extractPreferenceFromMessage(message: string) {
     }
   }
 
+  // Handle negative preferences / dislikes / foods that make feel bad
+  if (lower.includes('negative preference') || lower.includes('dislike') || 
+      lower.includes('makes me feel bad') || lower.includes('feel bad') ||
+      (lower.includes('add') && lower.includes('negative')) ||
+      lower.includes('dont like') || lower.includes("don't like") ||
+      lower.includes('not a fan') || lower.includes('hate') ||
+      lower.includes('cant stand') || lower.includes("can't stand")) {
+    
+    // Try to extract food name from various patterns
+    let foodName = null
+    
+    // Pattern: "add [food] as a negative preference"
+    const negativeMatch = message.match(/add\s+([^,\s]+(?:\s+[^,\s]+)*)\s+as\s+a\s+negative/i)
+    if (negativeMatch) {
+      foodName = negativeMatch[1].trim()
+    }
+    
+    // Pattern: "i dont like [food]" or "i don't like [food]"
+    const dontLikeMatch = message.match(/i\s+don?'?t\s+like\s+([^,\s]+(?:\s+[^,\s]+)*)/i)
+    if (dontLikeMatch && !foodName) {
+      foodName = dontLikeMatch[1].trim()
+    }
+    
+    // Pattern: "not a fan of [food]"
+    const notFanMatch = message.match(/not\s+a\s+fan\s+of\s+([^,\s]+(?:\s+[^,\s]+)*)/i)
+    if (notFanMatch && !foodName) {
+      foodName = notFanMatch[1].trim()
+    }
+    
+    // Pattern: "i hate [food]"
+    const hateMatch = message.match(/i\s+hate\s+([^,\s]+(?:\s+[^,\s]+)*)/i)
+    if (hateMatch && !foodName) {
+      foodName = hateMatch[1].trim()
+    }
+    
+    // Pattern: "can't stand [food]" or "cant stand [food]"
+    const cantStandMatch = message.match(/can'?t\s+stand\s+([^,\s]+(?:\s+[^,\s]+)*)/i)
+    if (cantStandMatch && !foodName) {
+      foodName = cantStandMatch[1].trim()
+    }
+    
+    // Pattern: "dislike [food]" or "[food] makes me feel bad"
+    const dislikeMatch = message.match(/dislike\s+([^,\s]+(?:\s+[^,\s]+)*)/i) ||
+                        message.match(/([^,\s]+(?:\s+[^,\s]+)*)\s+makes?\s+me\s+feel\s+bad/i)
+    if (dislikeMatch && !foodName) {
+      foodName = dislikeMatch[1].trim()
+    }
+    
+    // Pattern: "avoid [food]"
+    const avoidMatch = message.match(/avoid\s+([^,\s]+(?:\s+[^,\s]+)*)/i)
+    if (avoidMatch && !foodName) {
+      foodName = avoidMatch[1].trim()
+    }
+    
+    if (foodName) {
+      return {
+        type: 'dislike',
+        foodName: foodName,
+        notes: 'User dislikes this food or it makes them feel bad'
+      }
+    }
+  }
+
+  // Handle dietary restrictions
   if (lower.includes('vegetarian')) {
     return {
       type: 'dietary_restriction',
@@ -322,6 +397,18 @@ function extractPreferenceFromMessage(message: string) {
       type: 'dietary_restriction',
       foodName: 'animal products',
       notes: 'Vegan diet'
+    }
+  }
+
+  // Handle general restrictions/avoidances
+  if (lower.includes('restriction') || lower.includes('avoid')) {
+    const restrictionMatch = message.match(/(?:restriction|avoid)\s+([^,\s]+(?:\s+[^,\s]+)*)/i)
+    if (restrictionMatch) {
+      return {
+        type: 'dietary_restriction',
+        foodName: restrictionMatch[1].trim(),
+        notes: 'User wants to avoid this food'
+      }
     }
   }
 
