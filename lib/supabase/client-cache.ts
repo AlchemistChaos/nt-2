@@ -229,7 +229,7 @@ export function useAddChatMessage() {
 }
 
 // Quick Add Library hooks
-export function useBrands() {
+export function useBrands(options?: { enabled?: boolean }) {
   const supabase = getSupabaseClient()
   return useQuery<Brand[]>({
     queryKey: queryKeys.brands,
@@ -251,10 +251,11 @@ export function useBrands() {
       console.log(`[useBrands queryFn DEBUG] Fetched ${data?.length || 0} brands.`);
       return data || [];
     },
+    enabled: options?.enabled ?? true,
   });
 }
 
-export function useSavedItems(userId: string) {
+export function useSavedItems(userId: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.savedItems(userId),
     queryFn: async (): Promise<SavedItem[]> => {
@@ -270,13 +271,13 @@ export function useSavedItems(userId: string) {
 
       return items || []
     },
-    enabled: !!userId,
+    enabled: (options?.enabled ?? true) && !!userId,
     staleTime: 2 * 60 * 1000, // 2 minutes
     gcTime: 5 * 60 * 1000, // 5 minutes
   })
 }
 
-export function useSupplementSchedules(userId: string) {
+export function useSupplementSchedules(userId: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.supplementSchedules(userId),
     queryFn: async (): Promise<SupplementSchedule[]> => {
@@ -296,7 +297,7 @@ export function useSupplementSchedules(userId: string) {
 
       return schedules || []
     },
-    enabled: !!userId,
+    enabled: (options?.enabled ?? true) && !!userId,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
   })
@@ -516,7 +517,7 @@ export function useDeleteBrand() {
   })
 }
 
-export function useBrandStats(userId: string) {
+export function useBrandStats(userId: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['brandStats', userId],
     queryFn: async (): Promise<Record<string, { itemCount: number; totalUsage: number }>> => {
@@ -543,7 +544,7 @@ export function useBrandStats(userId: string) {
 
       return stats
     },
-    enabled: !!userId,
+    enabled: (options?.enabled ?? true) && !!userId,
     staleTime: 2 * 60 * 1000, // 2 minutes
     gcTime: 5 * 60 * 1000, // 5 minutes
   })

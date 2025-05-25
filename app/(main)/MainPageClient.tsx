@@ -65,6 +65,26 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
     router.push('/login')
   }
 
+  const handlePrefetchLibrary = () => {
+    // Prefetch saved items data when user hovers over library button
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.savedItems(user.id),
+      queryFn: async () => {
+        const supabase = createClient()
+        const { data: items } = await supabase
+          .from('saved_items')
+          .select(`
+            *,
+            brand:brands(*)
+          `)
+          .eq('user_id', user.id)
+          .order('times_used', { ascending: false })
+        return items || []
+      },
+      staleTime: 2 * 60 * 1000, // 2 minutes
+    })
+  }
+
   const handleSendMessage = async () => {
     if (!inputMessage.trim() && !selectedImage) return
 
@@ -199,6 +219,7 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
               size="icon"
               onClick={() => router.push('/library')}
               title="Quick Add Library"
+              onMouseEnter={handlePrefetchLibrary}
             >
               <BookOpen className="h-5 w-5" />
             </Button>

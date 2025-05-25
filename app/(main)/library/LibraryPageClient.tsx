@@ -35,23 +35,32 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
   const [viewingBrand, setViewingBrand] = useState<Brand | null>(null)
   const [activeTab, setActiveTab] = useState('items')
 
-  // Fetch data using React Query
-  const { data: savedItems = [], isLoading: itemsLoading } = useSavedItems(user.id)
-  const { data: brands = [], isLoading: brandsLoading, isError: brandsError, error: brandsFetchError } = useBrands()
-  const { data: supplementSchedules = [], isLoading: schedulesLoading } = useSupplementSchedules(user.id)
-  const { data: brandStats = {} } = useBrandStats(user.id)
+  // Lazy load data based on active tab - only fetch what's needed
+  const shouldLoadItems = activeTab === 'items'
+  const shouldLoadBrands = activeTab === 'brands'
+  const shouldLoadSupplements = activeTab === 'supplements'
 
-  // DEBUG: Log brands data whenever it changes
-  useEffect(() => {
-    console.log('[LibraryPageClient DEBUG] useEffect triggered. brandsLoading:', brandsLoading, 'brandsError:', brandsError)
-    if (brandsFetchError) {
-      console.error('[LibraryPageClient DEBUG] Error fetching brands in useBrands:', brandsFetchError);
-    }
-    if (!brandsLoading && !brandsError) {
-      const brandSummary = brands.map(b => ({ id: b.id, name: b.name }));
-      console.log(`[LibraryPageClient DEBUG] Brands data updated. Count: ${brands.length}. Brands (summary):`, brandSummary);
-    }
-  }, [brands, brandsLoading, brandsError, brandsFetchError])
+  // Fetch data using React Query with conditional loading
+  const { data: savedItems = [], isLoading: itemsLoading } = useSavedItems(user.id, { enabled: shouldLoadItems })
+  const { data: brands = [], isLoading: brandsLoading, isError: brandsError, error: brandsFetchError } = useBrands({ enabled: shouldLoadBrands })
+  const { data: supplementSchedules = [], isLoading: schedulesLoading } = useSupplementSchedules(user.id, { enabled: shouldLoadSupplements })
+  
+  // Only load brand stats when viewing brands tab and we have brands data
+  const { data: brandStats = {} } = useBrandStats(user.id, { enabled: shouldLoadBrands && brands.length > 0 })
+
+  // Extract unique brands from saved items to avoid redundant API call
+  const brandsFromItems = savedItems
+    .map(item => item.brand)
+    .filter((brand): brand is Brand => brand !== null && brand !== undefined)
+    .reduce((acc, brand) => {
+      if (!acc.find(b => b.id === brand.id)) {
+        acc.push(brand)
+      }
+      return acc
+    }, [] as Brand[])
+
+  // Use brands from saved items when on items tab, separate brands query when on brands tab
+  const allBrands = shouldLoadBrands ? brands : brandsFromItems
 
   // Filter items based on search query
   const filteredItems = savedItems.filter(item =>
@@ -60,7 +69,7 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
     item.category.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const filteredBrands = brands.filter(brand =>
+  const filteredBrands = allBrands.filter(brand =>
     brand.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     brand.type.toLowerCase().includes(searchQuery.toLowerCase())
   )
@@ -184,7 +193,7 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
             </TabsTrigger>
             <TabsTrigger value="brands" className="flex items-center gap-2">
               <Star className="h-4 w-4" />
-              Brands ({brands.length})
+              Brands ({allBrands.length})
             </TabsTrigger>
             <TabsTrigger value="supplements" className="flex items-center gap-2">
               <Pill className="h-4 w-4" />
@@ -221,7 +230,7 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
                   <SavedItemCard
                     key={item.id}
                     item={item}
-                    brands={brands}
+                    brands={allBrands}
                     onEdit={handleEditItem}
                     onItemUpdated={() => {
                       // React Query will automatically refetch
@@ -348,7 +357,7 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
         isOpen={showCreateItemModal}
         onClose={() => setShowCreateItemModal(false)}
         userId={user.id}
-        brands={brands}
+        brands={allBrands}
       />
 
       <CreateBrandModal
@@ -360,7 +369,7 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
         isOpen={showEditItemModal}
         onClose={handleCloseEditModal}
         item={editingItem}
-        brands={brands}
+        brands={allBrands}
       />
 
       <EditBrandModal
@@ -374,7 +383,7 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
         onClose={handleCloseBrandDetailModal}
         brand={viewingBrand}
         savedItems={savedItems}
-        brands={brands}
+        brands={allBrands}
         brandStats={viewingBrand ? brandStats[viewingBrand.id] : undefined}
       />
     </div>
