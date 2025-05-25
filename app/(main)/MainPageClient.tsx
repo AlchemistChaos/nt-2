@@ -8,9 +8,10 @@ import { ChatMessage as ChatMessageComponent } from '@/components/custom/ChatMes
 import { ImageUploadButton } from '@/components/custom/ImageUploadButton'
 import { DailyProgress } from '@/components/custom/DailyProgress'
 import { DayNavigation } from '@/components/custom/DayNavigation'
+import { DayTransitionNotification } from '@/components/custom/DayTransitionNotification'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Send, LogOut, Settings, Target, BookOpen } from 'lucide-react'
+import { Send, LogOut, Settings, Target, BookOpen, Clock } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useMealsForDate, useChatMessages, useDailyTargetForDate, queryKeys } from '@/lib/supabase/client-cache'
 import { useQueryClient } from '@tanstack/react-query'
@@ -38,6 +39,7 @@ export function MainPageClient({ user }: MainPageClientProps) {
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [showDayTransition, setShowDayTransition] = useState(false)
   
   // Check if current date is in the past (read-only mode)
   const isReadOnly = isPastDate(selectedDate)
@@ -45,6 +47,42 @@ export function MainPageClient({ user }: MainPageClientProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
   const router = useRouter()
+
+  // Auto-switch to today when a new day arrives
+  useEffect(() => {
+    const checkForNewDay = () => {
+      const currentToday = getTodayDateString()
+      
+      // If we're viewing a past date and it's now a new day, 
+      // automatically switch to today
+      if (selectedDate !== currentToday && isPastDate(selectedDate)) {
+        console.log('New day detected, switching to today:', currentToday)
+        setSelectedDate(currentToday)
+        setShowDayTransition(true)
+        
+        // Invalidate user days to refresh the sidebar
+        queryClient.invalidateQueries({ queryKey: queryKeys.userDays(user.id) })
+      }
+    }
+
+    // Check immediately
+    checkForNewDay()
+
+    // Set up interval to check every minute for day changes
+    const interval = setInterval(checkForNewDay, 60 * 1000) // Check every minute
+
+    // Also check when the window regains focus (user comes back to tab)
+    const handleFocus = () => {
+      checkForNewDay()
+    }
+    
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [selectedDate, user.id, queryClient])
 
   // Sync local state with cached messages when date changes
   // Only sync when date actually changes to prevent infinite loops
@@ -358,7 +396,7 @@ export function MainPageClient({ user }: MainPageClientProps) {
           {/* Input Area */}
           <div className="border-t border-gray-200 bg-white p-4">
             <div className="max-w-4xl mx-auto">
-              {isReadOnly && (
+              {isReadOnly ? (
                 <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-yellow-800">
@@ -366,7 +404,16 @@ export function MainPageClient({ user }: MainPageClientProps) {
                     </span>
                   </div>
                 </div>
-              )}
+              ) : selectedDate === getTodayDateString() ? (
+                <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-green-600" />
+                    <span className="text-sm text-green-800">
+                      🌟 You&apos;re on today&apos;s chat! Start logging meals or ask nutrition questions.
+                    </span>
+                  </div>
+                </div>
+              ) : null}
               
               {selectedImage && !isReadOnly && (
                 <div className="mb-3 p-3 bg-gray-50 rounded-lg">
@@ -419,6 +466,13 @@ export function MainPageClient({ user }: MainPageClientProps) {
         </div>
       </div>
       </div>
+
+      {/* Day Transition Notification */}
+      <DayTransitionNotification
+        show={showDayTransition}
+        onDismiss={() => setShowDayTransition(false)}
+        newDate={selectedDate}
+      />
     </div>
   )
 } 

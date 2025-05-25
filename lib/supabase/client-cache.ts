@@ -204,12 +204,16 @@ export function useUserDays(userId: string) {
       // Combine and deduplicate dates
       const allDates = new Set([...mealDates, ...chatDates])
       
+      // Always include today, even if no data exists yet
+      const today = new Date().toISOString().split('T')[0]
+      allDates.add(today)
+      
       // Convert to array and sort (most recent first)
       const datesArray: string[] = Array.from(allDates) as string[]
       return datesArray.sort((a, b) => b.localeCompare(a))
     },
     enabled: !!userId,
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 1 * 60 * 1000, // 1 minute (shorter to catch new days faster)
     gcTime: 5 * 60 * 1000, // 5 minutes
   })
 }

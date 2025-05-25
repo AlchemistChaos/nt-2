@@ -2,9 +2,10 @@
 
 import { useUserDays } from '@/lib/supabase/client-cache'
 import { formatDateForDisplay, getTodayDateString } from '@/lib/utils/date'
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useEffect, useState } from 'react'
 
 interface DayNavigationProps {
   userId: string
@@ -22,10 +23,48 @@ export function DayNavigation({
   onToggleCollapse 
 }: DayNavigationProps) {
   const { data: userDays = [], isLoading } = useUserDays(userId)
-  const today = getTodayDateString()
+  const [currentToday, setCurrentToday] = useState(getTodayDateString())
 
-  // Ensure today is always in the list
-  const allDays = userDays.includes(today) ? userDays : [today, ...userDays]
+  // Update today's date periodically to handle day transitions
+  useEffect(() => {
+    const updateToday = () => {
+      const newToday = getTodayDateString()
+      if (newToday !== currentToday) {
+        setCurrentToday(newToday)
+      }
+    }
+
+    // Check every minute for day changes
+    const interval = setInterval(updateToday, 60 * 1000)
+    
+    // Also check when window regains focus
+    const handleFocus = () => updateToday()
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [currentToday])
+
+  // Ensure today is always at the top of the list, even if no data exists yet
+  const allDays = (() => {
+    const days = [...userDays]
+    
+    // Add today if it's not already in the list
+    if (!days.includes(currentToday)) {
+      days.unshift(currentToday)
+    } else {
+      // Move today to the front if it exists elsewhere
+      const todayIndex = days.indexOf(currentToday)
+      if (todayIndex > 0) {
+        days.splice(todayIndex, 1)
+        days.unshift(currentToday)
+      }
+    }
+    
+    return days
+  })()
 
   if (isCollapsed) {
     return (
@@ -41,18 +80,33 @@ export function DayNavigation({
           </Button>
         </div>
         <div className="flex-1 flex flex-col items-center gap-2 p-2">
-          {allDays.slice(0, 5).map((date) => (
-            <Button
-              key={date}
-              variant={selectedDate === date ? "default" : "ghost"}
-              size="icon"
-              onClick={() => onDateSelect(date)}
-              className="w-8 h-8 text-xs"
-              title={formatDateForDisplay(date)}
-            >
-              <Calendar className="h-3 w-3" />
-            </Button>
-          ))}
+          {allDays.slice(0, 5).map((date) => {
+            const isToday = date === currentToday
+            const isSelected = selectedDate === date
+            
+            return (
+              <Button
+                key={date}
+                variant={isSelected ? "default" : "ghost"}
+                size="icon"
+                onClick={() => onDateSelect(date)}
+                className={cn(
+                  "w-8 h-8 text-xs relative",
+                  isToday && !isSelected && "ring-2 ring-blue-200"
+                )}
+                title={formatDateForDisplay(date)}
+              >
+                {isToday ? (
+                  <Clock className="h-3 w-3" />
+                ) : (
+                  <Calendar className="h-3 w-3" />
+                )}
+                {isToday && (
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full" />
+                )}
+              </Button>
+            )
+          })}
         </div>
       </div>
     )
@@ -88,6 +142,7 @@ export function DayNavigation({
           <div className="p-2 space-y-1">
             {allDays.map((date) => {
               const isSelected = selectedDate === date
+              const isToday = date === currentToday
               const displayName = formatDateForDisplay(date)
               
               return (
@@ -95,17 +150,38 @@ export function DayNavigation({
                   key={date}
                   variant={isSelected ? "default" : "ghost"}
                   className={cn(
-                    "w-full justify-start text-left h-auto py-3 px-3",
+                    "w-full justify-start text-left h-auto py-3 px-3 relative",
                     isSelected && "bg-blue-600 text-white hover:bg-blue-700",
-                    !isSelected && "hover:bg-gray-100"
+                    !isSelected && isToday && "bg-green-50 border border-green-200 hover:bg-green-100",
+                    !isSelected && !isToday && "hover:bg-gray-100"
                   )}
                   onClick={() => onDateSelect(date)}
                 >
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium">{displayName}</span>
-                    <span className="text-xs opacity-70">
-                      {date === today ? 'Current day' : date}
-                    </span>
+                  <div className="flex items-center gap-2 w-full">
+                    <div className="flex-shrink-0">
+                      {isToday ? (
+                        <Clock className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <Calendar className="h-4 w-4 text-gray-400" />
+                      )}
+                    </div>
+                    <div className="flex flex-col items-start flex-1 min-w-0">
+                      <span className={cn(
+                        "font-medium truncate",
+                        isToday && !isSelected && "text-green-700"
+                      )}>
+                        {displayName}
+                      </span>
+                      <span className={cn(
+                        "text-xs opacity-70 truncate",
+                        isToday && !isSelected && "text-green-600"
+                      )}>
+                        {isToday ? 'Current day' : date}
+                      </span>
+                    </div>
+                    {isToday && !isSelected && (
+                      <div className="flex-shrink-0 w-2 h-2 bg-green-500 rounded-full" />
+                    )}
                   </div>
                 </Button>
               )
@@ -119,12 +195,15 @@ export function DayNavigation({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => onDateSelect(today)}
-          className="w-full"
-          disabled={selectedDate === today}
+          onClick={() => onDateSelect(currentToday)}
+          className={cn(
+            "w-full",
+            selectedDate === currentToday && "bg-green-50 border-green-200 text-green-700"
+          )}
+          disabled={selectedDate === currentToday}
         >
-          <Calendar className="h-4 w-4 mr-2" />
-          Go to Today
+          <Clock className="h-4 w-4 mr-2" />
+          {selectedDate === currentToday ? "You're on Today" : "Go to Today"}
         </Button>
       </div>
     </div>
