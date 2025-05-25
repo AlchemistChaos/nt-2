@@ -1,5 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { User, Preference, MealWithItems, ChatMessage, DailyTarget, Brand, SavedItem, SupplementSchedule, Biometric, Goal } from '@/types'
 
 // Create a singleton Supabase client for browser use
@@ -35,7 +36,9 @@ export const queryKeys = {
 
 // Client-side data fetching hooks with caching
 export function useCurrentUser() {
-  return useQuery({
+  const queryClient = useQueryClient()
+  
+  const query = useQuery({
     queryKey: queryKeys.user,
     queryFn: async (): Promise<User | null> => {
       const supabase = getSupabaseClient()
@@ -51,9 +54,30 @@ export function useCurrentUser() {
 
       return user
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 1 * 60 * 1000, // 1 minute (shorter for auth)
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    retry: (failureCount, error) => {
+      // Don't retry if it's an auth error
+      if (error && typeof error === 'object' && 'code' in error) {
+        return false
+      }
+      return failureCount < 2
+    }
   })
+
+  // Set up auth state listener to invalidate user query
+  useEffect(() => {
+    const supabase = getSupabaseClient()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: string) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        queryClient.invalidateQueries({ queryKey: queryKeys.user })
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [queryClient])
+
+  return query
 }
 
 export function useUserPreferences(userId: string) {

@@ -15,7 +15,12 @@ export default function OptimizedMainPage() {
   // Handle authentication redirect
   useEffect(() => {
     if (!userLoading && !user && !userError) {
-      redirect('/login')
+      // Use window.location for more reliable redirect in production
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login'
+      } else {
+        redirect('/login')
+      }
     }
   }, [user, userLoading, userError])
 

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,7 +19,23 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
 
+  const router = useRouter()
   const supabase = createClient()
+
+  // Listen for auth state changes
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        // Small delay to ensure session is properly set
+        setTimeout(() => {
+          router.push('/')
+          router.refresh() // Force a refresh to update middleware
+        }, 100)
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [router, supabase.auth])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,6 +63,9 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
         })
         
         if (error) throw error
+        
+        // Show success message for login
+        setMessage('Signing you in...')
       }
     } catch (error: unknown) {
       setMessage(error instanceof Error ? error.message : 'An error occurred')
