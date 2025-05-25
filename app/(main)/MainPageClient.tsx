@@ -9,7 +9,7 @@ import { ImageUploadButton } from '@/components/custom/ImageUploadButton'
 import { DailyProgress } from '@/components/custom/DailyProgress'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Send, LogOut, Settings, Target } from 'lucide-react'
+import { Send, LogOut, Settings, Target, BookOpen } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useTodaysMeals, useChatMessages, useTodaysDailyTarget, queryKeys } from '@/lib/supabase/client-cache'
 import { useQueryClient } from '@tanstack/react-query'
@@ -194,6 +194,14 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
             <span className="text-sm text-gray-500">Welcome, {user.name || user.email}</span>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push('/library')}
+              title="Quick Add Library"
+            >
+              <BookOpen className="h-5 w-5" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"

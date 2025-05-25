@@ -130,4 +130,59 @@ export interface CalorieRecommendation {
   tdee: number;
   deficit?: number;
   surplus?: number;
+}
+
+// Quick Add Library Types
+export interface Brand {
+  id: string;
+  name: string;
+  type: 'restaurant' | 'supplement_brand' | 'food_brand' | 'other';
+  description?: string;
+  website?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SavedItem {
+  id: string;
+  user_id: string;
+  brand_id?: string;
+  brand?: Brand;
+  name: string;
+  category: 'meal' | 'snack' | 'supplement' | 'drink' | 'ingredient';
+  serving_size?: string;
+  kcal_per_serving?: number;
+  g_protein_per_serving?: number;
+  g_carb_per_serving?: number;
+  g_fat_per_serving?: number;
+  ingredients?: string[];
+  allergens?: string[];
+  notes?: string;
+  image_url?: string;
+  times_used: number;
+  last_used_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuickAddPattern {
+  id: string;
+  saved_item_id: string;
+  saved_item?: SavedItem;
+  pattern: string;
+  confidence_score: number;
+  created_at: string;
+}
+
+export interface SupplementSchedule {
+  id: string;
+  user_id: string;
+  saved_item_id: string;
+  saved_item?: SavedItem;
+  frequency: 'daily' | 'weekly' | 'as_needed';
+  times_per_day: number;
+  preferred_times?: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 } 

@@ -1,5 +1,5 @@
 import { createClient } from './client'
-import { Meal, Biometric, Goal, DailyTarget } from '@/types'
+import { Meal, Biometric, Goal, DailyTarget, SavedItem, Brand, SupplementSchedule } from '@/types'
 
 export async function updateMeal(
   mealId: string,
@@ -115,4 +115,97 @@ export async function getTodaysDailyTargetClient(userId: string): Promise<DailyT
     .single()
 
   return target
+}
+
+// Quick Add Library client functions
+export async function createSavedItemClient(itemData: Omit<SavedItem, 'id' | 'times_used' | 'created_at' | 'updated_at'>): Promise<SavedItem | null> {
+  const supabase = createClient()
+  
+  const { data: item } = await supabase
+    .from('saved_items')
+    .insert({
+      ...itemData,
+      times_used: 0
+    })
+    .select(`
+      *,
+      brand:brands(*)
+    `)
+    .single()
+
+  return item
+}
+
+export async function updateSavedItemClient(itemId: string, updates: Partial<SavedItem>): Promise<SavedItem | null> {
+  const supabase = createClient()
+  
+  const { data: item } = await supabase
+    .from('saved_items')
+    .update(updates)
+    .eq('id', itemId)
+    .select(`
+      *,
+      brand:brands(*)
+    `)
+    .single()
+
+  return item
+}
+
+export async function deleteSavedItemClient(itemId: string): Promise<boolean> {
+  const supabase = createClient()
+  
+  const { error } = await supabase
+    .from('saved_items')
+    .delete()
+    .eq('id', itemId)
+
+  if (error) {
+    console.error('Error deleting saved item:', error)
+    return false
+  }
+
+  return true
+}
+
+export async function createBrandClient(brandData: Omit<Brand, 'id' | 'created_at' | 'updated_at'>): Promise<Brand | null> {
+  const supabase = createClient()
+  
+  const { data: brand } = await supabase
+    .from('brands')
+    .insert(brandData)
+    .select()
+    .single()
+
+  return brand
+}
+
+export async function updateItemUsageClient(itemId: string): Promise<void> {
+  const supabase = createClient()
+  
+  const { error } = await supabase.rpc('update_item_usage', {
+    item_id: itemId
+  })
+
+  if (error) {
+    console.error('Error updating item usage:', error)
+  }
+}
+
+export async function createSupplementScheduleClient(scheduleData: Omit<SupplementSchedule, 'id' | 'created_at' | 'updated_at'>): Promise<SupplementSchedule | null> {
+  const supabase = createClient()
+  
+  const { data: schedule } = await supabase
+    .from('supplement_schedules')
+    .insert(scheduleData)
+    .select(`
+      *,
+      saved_item:saved_items(
+        *,
+        brand:brands(*)
+      )
+    `)
+    .single()
+
+  return schedule
 } 
