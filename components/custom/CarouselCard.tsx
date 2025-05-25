@@ -1,0 +1,95 @@
+'use client'
+
+import { Card, CardContent } from '@/components/ui/card'
+import { MealWithItems } from '@/types'
+import { formatTime } from '@/lib/utils'
+import { Clock, Utensils, Plus } from 'lucide-react'
+
+interface CarouselCardProps {
+  meal?: MealWithItems
+  isPlaceholder?: boolean
+  mealType?: string
+}
+
+export function CarouselCard({ meal, isPlaceholder, mealType }: CarouselCardProps) {
+  if (isPlaceholder) {
+    return (
+      <Card className="min-w-[280px] h-[200px] border-dashed border-2 border-gray-300 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer">
+        <CardContent className="p-4 h-full flex flex-col items-center justify-center text-gray-500">
+          <Plus className="h-8 w-8 mb-2" />
+          <p className="text-sm font-medium">Plan your {mealType || 'meal'}</p>
+          <p className="text-xs text-gray-400 mt-1">Click to add</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!meal) return null
+
+  const isPlanned = meal.status === 'planned'
+
+  return (
+    <Card className="min-w-[280px] h-[200px] bg-white shadow-sm hover:shadow-md transition-shadow">
+      <CardContent className="p-4 h-full flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Utensils className="h-4 w-4 text-gray-600" />
+            <span className="text-sm font-medium text-gray-600 capitalize">
+              {meal.meal_type || 'Meal'}
+            </span>
+          </div>
+          {isPlanned && (
+            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+              Planned
+            </span>
+          )}
+        </div>
+
+        {/* Image or placeholder */}
+        <div className="flex-1 mb-3">
+          {meal.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={meal.image_url}
+              alt={meal.meal_name || 'Meal'}
+              className="w-full h-20 object-cover rounded-md"
+            />
+          ) : (
+            <div className="w-full h-20 bg-gray-100 rounded-md flex items-center justify-center">
+              <Utensils className="h-6 w-6 text-gray-400" />
+            </div>
+          )}
+        </div>
+
+        {/* Meal info */}
+        <div className="space-y-2">
+          <h3 className="font-medium text-sm line-clamp-1">
+            {meal.meal_name || 'Unnamed meal'}
+          </h3>
+          
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <Clock className="h-3 w-3" />
+            <span>{formatTime(meal.logged_at)}</span>
+          </div>
+
+          {/* Nutrition info - only show for logged meals */}
+          {!isPlanned && (meal.kcal_total || meal.g_protein) && (
+            <div className="flex gap-4 text-xs">
+              {meal.kcal_total && (
+                <span className="text-gray-600">
+                  {meal.kcal_total} cal
+                </span>
+              )}
+              {meal.g_protein && (
+                <span className="text-gray-600">
+                  {meal.g_protein}g protein
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+} 
