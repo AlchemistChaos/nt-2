@@ -214,7 +214,11 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
       <div className="flex-1 max-w-7xl mx-auto w-full flex flex-col">
         {/* Meal Carousel Section */}
         <div className="p-6 bg-white border-b border-gray-200">
-          <CustomMealCarousel meals={meals} />
+          <CustomMealCarousel 
+            meals={meals} 
+            onMealUpdated={refreshMeals}
+            onMealDeleted={refreshMeals}
+          />
         </div>
 
         {/* Chat Section */}

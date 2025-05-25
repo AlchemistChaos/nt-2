@@ -8,9 +8,11 @@ import { Button } from '@/components/ui/button'
 
 interface CustomMealCarouselProps {
   meals: MealWithItems[]
+  onMealUpdated?: () => void
+  onMealDeleted?: () => void
 }
 
-export function CustomMealCarousel({ meals }: CustomMealCarouselProps) {
+export function CustomMealCarousel({ meals, onMealUpdated, onMealDeleted }: CustomMealCarouselProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const scroll = (direction: 'left' | 'right') => {
@@ -75,7 +77,12 @@ export function CustomMealCarousel({ meals }: CustomMealCarouselProps) {
         >
           {/* Actual meals */}
           {meals.map((meal) => (
-            <CarouselCard key={meal.id} meal={meal} />
+            <CarouselCard 
+              key={meal.id} 
+              meal={meal} 
+              onMealUpdated={onMealUpdated}
+              onMealDeleted={onMealDeleted}
+            />
           ))}
           
           {/* Placeholder cards */}
