@@ -22,3 +22,17 @@ export function convertImageToBase64(file: File): Promise<string> {
     reader.readAsDataURL(file)
   })
 }
+
+export function getMealTypeFromTime(): string {
+  const hour = new Date().getHours()
+  
+  if (hour >= 5 && hour < 11) {
+    return 'breakfast'
+  } else if (hour >= 11 && hour < 16) {
+    return 'lunch'
+  } else if (hour >= 16 && hour < 22) {
+    return 'dinner'
+  } else {
+    return 'snack'
+  }
+}
