@@ -150,6 +150,12 @@ export function CarouselCard({
                     {meal.g_protein}g protein
                   </span>
                 )}
+                {/* Debug info - remove after fixing */}
+                {process.env.NODE_ENV === 'development' && (
+                  <span className="text-red-500 text-xs">
+                    [Debug: P:{meal.g_protein} C:{meal.g_carb} F:{meal.g_fat}]
+                  </span>
+                )}
               </div>
             )}
           </div>

@@ -197,6 +197,7 @@ async function processIntentAndTakeAction(
       const mealData = await processMealFromMessage(userMessage, image)
       if (mealData && mealData.name) {
         console.log('Logging meal:', mealData) // Debug log
+        console.log('Nutrition breakdown - Protein:', mealData.protein, 'Carbs:', mealData.carbs, 'Fat:', mealData.fat) // Debug nutrition
         const meal = await addMeal(userId, {
           meal_name: mealData.name,
           meal_type: mealData.type || getMealTypeFromTime(),
@@ -279,6 +280,8 @@ Rules:
 4. Provide realistic nutritional values for a typical serving size
 5. If you cannot identify a food item, return null for foodItem
 6. Be conservative with portion estimates (assume standard serving sizes)
+7. IMPORTANT: protein, carbs, and fat should be SEPARATE values, NOT totals or sums
+8. Each macronutrient should be calculated independently based on the food item
 
 Examples:
 - "lets add tuna for breakfast" → {"foodItem": "tuna", "mealType": "breakfast", "calories": 132, "protein": 28, "carbs": 0, "fat": 1}
@@ -324,6 +327,25 @@ Examples:
       
       // Validate the response
       if (!mealData.foodItem) return null
+      
+      // Debug: Log the AI response to check for issues
+      console.log('AI Nutrition Response:', {
+        food: mealData.foodItem,
+        protein: mealData.protein,
+        carbs: mealData.carbs,
+        fat: mealData.fat,
+        calories: mealData.calories
+      })
+      
+      // Validate nutrition values are reasonable
+      const protein = mealData.protein || 0
+      const carbs = mealData.carbs || 0
+      const fat = mealData.fat || 0
+      
+      // Check if protein value seems wrong (e.g., if it equals carbs + fat, it might be a sum)
+      if (protein > 0 && protein === (carbs + fat)) {
+        console.warn('Suspicious protein value detected - might be sum of macros:', { protein, carbs, fat })
+      }
       
       return {
         name: mealData.foodItem,
