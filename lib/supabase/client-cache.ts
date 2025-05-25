@@ -213,7 +213,17 @@ export function useUserDays(userId: string) {
       
       // Convert to array and sort (most recent first)
       const datesArray: string[] = Array.from(allDates) as string[]
-      return datesArray.sort((a, b) => b.localeCompare(a))
+      const sortedDates = datesArray.sort((a, b) => b.localeCompare(a))
+      
+      console.log('[useUserDays Debug]', {
+        todayString,
+        mealDatesCount: mealDates.size,
+        chatDatesCount: chatDates.size,
+        totalDatesCount: allDates.size,
+        sortedDates
+      })
+      
+      return sortedDates
     },
     enabled: !!userId,
     staleTime: 1 * 60 * 1000, // 1 minute (shorter to catch new days faster)

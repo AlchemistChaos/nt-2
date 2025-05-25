@@ -49,7 +49,8 @@ export function DayNavigation({
 
   // Ensure today is always at the top of the list, even if no data exists yet
   const allDays = (() => {
-    const days = [...userDays]
+    // Start with user days (which come from database)
+    let days = [...userDays]
     
     console.log('[DayNavigation Debug]', {
       currentToday,
@@ -58,22 +59,19 @@ export function DayNavigation({
       localTime: new Date().toLocaleString()
     })
     
-    // Add today if it's not already in the list
-    if (!days.includes(currentToday)) {
-      console.log('📅 Adding today to sidebar:', currentToday)
-      days.unshift(currentToday)
-    } else {
-      // Move today to the front if it exists elsewhere
-      const todayIndex = days.indexOf(currentToday)
-      if (todayIndex > 0) {
-        console.log('📅 Moving today to front of sidebar:', currentToday)
-        days.splice(todayIndex, 1)
-        days.unshift(currentToday)
-      }
-    }
+    // Remove today from the list if it exists (we'll add it at the top)
+    days = days.filter(day => day !== currentToday)
     
-    console.log('📅 Final sidebar days:', days)
-    return days
+    // Always put today at the top
+    days.unshift(currentToday)
+    
+    // Sort the remaining days (excluding today) in descending order (newest first)
+    const todayAtTop = days[0] // Save today
+    const otherDays = days.slice(1).sort((a, b) => b.localeCompare(a))
+    const finalDays = [todayAtTop, ...otherDays]
+    
+    console.log('📅 Final sidebar days (today first, then newest to oldest):', finalDays)
+    return finalDays
   })()
 
   if (isCollapsed) {
@@ -160,12 +158,15 @@ export function DayNavigation({
                   key={date}
                   variant={isSelected ? "default" : "ghost"}
                   className={cn(
-                    "w-full justify-start text-left h-auto py-3 px-3 relative",
-                    isSelected && "bg-blue-600 text-white hover:bg-blue-700",
-                    !isSelected && isToday && "bg-green-50 border border-green-200 hover:bg-green-100",
-                    !isSelected && !isToday && "hover:bg-gray-100"
+                    "w-full justify-start text-left h-auto py-3 px-3 relative transition-all duration-200",
+                    isSelected && "bg-blue-600 text-white hover:bg-blue-700 shadow-md",
+                    !isSelected && isToday && "bg-green-50 border border-green-200 hover:bg-green-100 hover:border-green-300",
+                    !isSelected && !isToday && "hover:bg-gray-100 hover:shadow-sm"
                   )}
-                  onClick={() => onDateSelect(date)}
+                  onClick={() => {
+                    console.log('📅 Day clicked:', date, 'isToday:', isToday, 'isSelected:', isSelected)
+                    onDateSelect(date)
+                  }}
                 >
                   <div className="flex items-center gap-2 w-full">
                     <div className="flex-shrink-0">
@@ -186,7 +187,7 @@ export function DayNavigation({
                         "text-xs opacity-70 truncate",
                         isToday && !isSelected && "text-green-600"
                       )}>
-                        {isToday ? 'Current day' : date}
+                        {isToday ? 'Current day' : `${date} • Click to view`}
                       </span>
                     </div>
                     {isToday && !isSelected && (
