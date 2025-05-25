@@ -34,7 +34,7 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
   const queryClient = useQueryClient()
   
   // Use local state for real-time updates, but sync with cached messages
-  const [messages, setMessages] = useState(cachedMessages)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
@@ -46,10 +46,22 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
   const supabase = createClient()
   const router = useRouter()
 
-  // Sync local state with cached messages when they change
+  // Sync local state with cached messages when date changes
+  // Only sync when date actually changes to prevent infinite loops
+  const prevSelectedDate = useRef<string>(selectedDate)
   useEffect(() => {
-    setMessages(cachedMessages)
-  }, [cachedMessages])
+    if (selectedDate !== prevSelectedDate.current) {
+      setMessages(cachedMessages)
+      prevSelectedDate.current = selectedDate
+    }
+  }, [selectedDate, cachedMessages])
+
+  // Initialize messages on first load
+  useEffect(() => {
+    if (messages.length === 0 && cachedMessages.length > 0) {
+      setMessages(cachedMessages)
+    }
+  }, [cachedMessages, messages.length])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
