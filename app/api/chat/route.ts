@@ -23,7 +23,14 @@ export async function POST(request: NextRequest) {
     const { message, image } = await request.json()
 
     // Get current user
-    const user = await getCurrentUser()
+    let user
+    try {
+      user = await getCurrentUser()
+    } catch (userError) {
+      console.error('Failed to get current user:', userError)
+      return NextResponse.json({ error: 'Failed to authenticate user' }, { status: 401 })
+    }
+    
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -150,8 +157,16 @@ ${recentMessages.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n')}`
 
   } catch (error) {
     console.error('Chat API error:', error)
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString()
+    })
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : 'Unknown error') : undefined
+      },
       { status: 500 }
     )
   }
