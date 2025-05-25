@@ -14,7 +14,7 @@ import { Send, LogOut, Settings, Target, BookOpen } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useMealsForDate, useChatMessages, useDailyTargetForDate, queryKeys } from '@/lib/supabase/client-cache'
 import { useQueryClient } from '@tanstack/react-query'
-import { getTodayDateString, isToday, isPastDate } from '@/lib/utils/date'
+import { getTodayDateString, isToday, isPastDate, formatDateForDisplay } from '@/lib/utils/date'
 
 interface MainPageClientProps {
   user: User
@@ -248,12 +248,25 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSendMessage()
+      if (!isReadOnly) {
+        handleSendMessage()
+      }
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Day Navigation Sidebar */}
+      <DayNavigation
+        userId={user.id}
+        selectedDate={selectedDate}
+        onDateSelect={setSelectedDate}
+        isCollapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -333,7 +346,17 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
           {/* Input Area */}
           <div className="border-t border-gray-200 bg-white p-4">
             <div className="max-w-4xl mx-auto">
-              {selectedImage && (
+              {isReadOnly && (
+                <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-yellow-800">
+                      📅 You're viewing {formatDateForDisplay(selectedDate)}. You can view past data but cannot send new messages.
+                    </span>
+                  </div>
+                </div>
+              )}
+              
+              {selectedImage && !isReadOnly && (
                 <div className="mb-3 p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">Image selected</span>
@@ -354,20 +377,25 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    placeholder="Ask about nutrition, log a meal, or upload a food photo..."
-                    disabled={isLoading}
+                    placeholder={isReadOnly 
+                      ? `Viewing ${formatDateForDisplay(selectedDate)} - Switch to today to send messages`
+                      : "Ask about nutrition, log a meal, or upload a food photo..."
+                    }
+                    disabled={isLoading || isReadOnly}
                     className="min-h-[44px]"
                   />
                 </div>
                 
-                <ImageUploadButton
-                  onImageSelect={setSelectedImage}
-                  disabled={isLoading}
-                />
+                {!isReadOnly && (
+                  <ImageUploadButton
+                    onImageSelect={setSelectedImage}
+                    disabled={isLoading}
+                  />
+                )}
                 
                 <Button
                   onClick={handleSendMessage}
-                  disabled={isLoading || (!inputMessage.trim() && !selectedImage)}
+                  disabled={isLoading || (!inputMessage.trim() && !selectedImage) || isReadOnly}
                   size="icon"
                   className="h-11 w-11"
                 >
@@ -377,6 +405,7 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   )

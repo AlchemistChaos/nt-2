@@ -4,11 +4,13 @@ import { useCurrentUser, useTodaysMeals, useChatMessages } from '@/lib/supabase/
 import { MainPageClient } from './MainPageClient'
 import { redirect } from 'next/navigation'
 import { useEffect } from 'react'
+import { getTodayDateString } from '@/lib/utils/date'
 
 export default function OptimizedMainPage() {
   const { data: user, isLoading: userLoading, error: userError } = useCurrentUser()
   const { data: todaysMeals = [], isLoading: mealsLoading } = useTodaysMeals(user?.id || '')
-  const { data: chatMessages = [], isLoading: messagesLoading } = useChatMessages(user?.id || '', 20)
+  const today = getTodayDateString()
+  const { data: chatMessages = [], isLoading: messagesLoading } = useChatMessages(user?.id || '', today, 20)
 
   // Handle authentication redirect
   useEffect(() => {
