@@ -286,7 +286,9 @@ Rules:
 Examples:
 - "lets add tuna for breakfast" → {"foodItem": "tuna", "mealType": "breakfast", "calories": 132, "protein": 28, "carbs": 0, "fat": 1}
 - "i had banana bread" → {"foodItem": "banana bread", "mealType": null, "calories": 196, "protein": 3, "carbs": 33, "fat": 6}
-- "salmon avocado" → {"foodItem": "salmon avocado", "mealType": null, "calories": 280, "protein": 25, "carbs": 8, "fat": 18}`
+- "salmon avocado" → {"foodItem": "salmon avocado", "mealType": null, "calories": 280, "protein": 25, "carbs": 8, "fat": 18}
+
+CRITICAL: The "protein" field should ONLY contain grams of protein, NOT the sum of all macronutrients. For example, if a food has 10g protein + 15g carbs + 5g fat, the protein field should be 10, NOT 30.`
 
     const messages: any[] = [
       {
@@ -345,6 +347,16 @@ Examples:
       // Check if protein value seems wrong (e.g., if it equals carbs + fat, it might be a sum)
       if (protein > 0 && protein === (carbs + fat)) {
         console.warn('Suspicious protein value detected - might be sum of macros:', { protein, carbs, fat })
+      }
+      
+      // Additional validation: check if protein seems unreasonably high compared to calories
+      // Protein has 4 calories per gram, so protein * 4 shouldn't exceed total calories
+      if (protein > 0 && mealData.calories > 0 && (protein * 4) > mealData.calories) {
+        console.warn('Protein value seems too high for calorie count:', { 
+          protein, 
+          calories: mealData.calories, 
+          proteinCalories: protein * 4 
+        })
       }
       
       return {
