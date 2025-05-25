@@ -215,13 +215,7 @@ export function useUserDays(userId: string) {
       const datesArray: string[] = Array.from(allDates) as string[]
       const sortedDates = datesArray.sort((a, b) => b.localeCompare(a))
       
-      console.log('[useUserDays Debug]', {
-        todayString,
-        mealDatesCount: mealDates.size,
-        chatDatesCount: chatDates.size,
-        totalDatesCount: allDates.size,
-        sortedDates
-      })
+
       
       return sortedDates
     },

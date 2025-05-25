@@ -52,13 +52,6 @@ export function DayNavigation({
     // Start with user days (which come from database)
     let days = [...userDays]
     
-    console.log('[DayNavigation Debug]', {
-      currentToday,
-      userDays,
-      selectedDate,
-      localTime: new Date().toLocaleString()
-    })
-    
     // Remove today from the list if it exists (we'll add it at the top)
     days = days.filter(day => day !== currentToday)
     
@@ -70,7 +63,6 @@ export function DayNavigation({
     const otherDays = days.slice(1).sort((a, b) => b.localeCompare(a))
     const finalDays = [todayAtTop, ...otherDays]
     
-    console.log('📅 Final sidebar days (today first, then newest to oldest):', finalDays)
     return finalDays
   })()
 
@@ -163,10 +155,7 @@ export function DayNavigation({
                     !isSelected && isToday && "bg-green-50 border border-green-200 hover:bg-green-100 hover:border-green-300",
                     !isSelected && !isToday && "hover:bg-gray-100 hover:shadow-sm"
                   )}
-                  onClick={() => {
-                    console.log('📅 Day clicked:', date, 'isToday:', isToday, 'isSelected:', isSelected)
-                    onDateSelect(date)
-                  }}
+                  onClick={() => onDateSelect(date)}
                 >
                   <div className="flex items-center gap-2 w-full">
                     <div className="flex-shrink-0">
