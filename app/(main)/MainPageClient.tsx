@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Send, LogOut, Settings } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useTodaysMeals, useChatMessages, queryKeys } from '@/lib/supabase/client-cache'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface MainPageClientProps {
   user: User
@@ -18,8 +20,13 @@ interface MainPageClientProps {
 }
 
 export function MainPageClient({ user, initialMeals, initialMessages }: MainPageClientProps) {
-  const [meals, setMeals] = useState(initialMeals)
-  const [messages, setMessages] = useState(initialMessages)
+  // Use React Query for both meals and chat messages with real-time updates
+  const { data: meals = initialMeals } = useTodaysMeals(user.id)
+  const { data: cachedMessages = initialMessages } = useChatMessages(user.id, 20)
+  const queryClient = useQueryClient()
+  
+  // Use local state for real-time updates, but sync with cached messages
+  const [messages, setMessages] = useState(cachedMessages)
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
@@ -27,6 +34,11 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
   const router = useRouter()
+
+  // Sync local state with cached messages when they change
+  useEffect(() => {
+    setMessages(cachedMessages)
+  }, [cachedMessages])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -37,25 +49,13 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
   }, [messages])
 
   const refreshMeals = async () => {
-    try {
-      const today = new Date().toISOString().split('T')[0]
-      const { data: freshMeals } = await supabase
-        .from('meals')
-        .select(`
-          *,
-          meal_items (*)
-        `)
-        .eq('user_id', user.id)
-        .eq('date', today)
-        .order('logged_at', { ascending: true })
+    // Use React Query to invalidate and refetch meals data
+    await queryClient.invalidateQueries({ queryKey: queryKeys.todaysMeals(user.id) })
+  }
 
-      if (freshMeals) {
-        setMeals(freshMeals)
-        console.log('Meals refreshed:', freshMeals)
-      }
-    } catch (error) {
-      console.error('Error refreshing meals:', error)
-    }
+  const refreshMessages = async () => {
+    // Use React Query to invalidate and refetch chat messages
+    await queryClient.invalidateQueries({ queryKey: queryKeys.chatMessages(user.id, 20) })
   }
 
   const handleSignOut = async () => {
@@ -127,6 +127,8 @@ export function MainPageClient({ user, initialMeals, initialMessages }: MainPage
             if (line.startsWith('data: ')) {
               const data = line.slice(6)
               if (data === '[DONE]') {
+                // Refresh messages cache when streaming is complete
+                await refreshMessages()
                 break
               }
 

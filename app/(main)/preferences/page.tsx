@@ -1,18 +1,37 @@
-import { redirect } from 'next/navigation'
-import { getCurrentUser, getUserPreferences } from '@/lib/supabase/database'
+'use client'
+
+import { useCurrentUser, useUserPreferences } from '@/lib/supabase/client-cache'
 import { PreferencesPageClient } from './PreferencesPageClient'
+import { redirect } from 'next/navigation'
+import { useEffect } from 'react'
 
-// Force dynamic rendering to avoid build-time issues
-export const dynamic = 'force-dynamic'
+export default function OptimizedPreferencesPage() {
+  const { data: user, isLoading: userLoading, error: userError } = useCurrentUser()
+  const { data: preferences = [], isLoading: preferencesLoading } = useUserPreferences(user?.id || '')
 
-export default async function PreferencesPage() {
-  const user = await getCurrentUser()
-  
-  if (!user) {
-    redirect('/login')
+  // Handle authentication redirect
+  useEffect(() => {
+    if (!userLoading && !user && !userError) {
+      redirect('/login')
+    }
+  }, [user, userLoading, userError])
+
+  // Show loading state while fetching user data
+  if (userLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your preferences...</p>
+        </div>
+      </div>
+    )
   }
 
-  const preferences = await getUserPreferences(user.id)
+  // Handle auth error or no user
+  if (!user) {
+    return null // Will redirect via useEffect
+  }
 
   return (
     <PreferencesPageClient 

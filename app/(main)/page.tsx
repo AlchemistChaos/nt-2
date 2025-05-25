@@ -1,34 +1,44 @@
-import { redirect } from 'next/navigation'
-import { getCurrentUser, getTodaysMeals, getChatMessages } from '@/lib/supabase/database'
+'use client'
+
+import { useCurrentUser, useTodaysMeals, useChatMessages } from '@/lib/supabase/client-cache'
 import { MainPageClient } from './MainPageClient'
+import { redirect } from 'next/navigation'
+import { useEffect } from 'react'
 
-// Force dynamic rendering to avoid build-time issues
-export const dynamic = 'force-dynamic'
+export default function OptimizedMainPage() {
+  const { data: user, isLoading: userLoading, error: userError } = useCurrentUser()
+  const { data: todaysMeals = [], isLoading: mealsLoading } = useTodaysMeals(user?.id || '')
+  const { data: chatMessages = [], isLoading: messagesLoading } = useChatMessages(user?.id || '', 20)
 
-export default async function MainPage() {
-  try {
-    const user = await getCurrentUser()
-    
-    if (!user) {
+  // Handle authentication redirect
+  useEffect(() => {
+    if (!userLoading && !user && !userError) {
       redirect('/login')
     }
+  }, [user, userLoading, userError])
 
-    // Get initial data with error handling
-    const [todaysMeals, chatMessages] = await Promise.all([
-      getTodaysMeals(user.id).catch(() => []),
-      getChatMessages(user.id, 20).catch(() => [])
-    ])
-
+  // Show loading state while fetching user data
+  if (userLoading) {
     return (
-      <MainPageClient 
-        user={user}
-        initialMeals={todaysMeals}
-        initialMessages={chatMessages}
-      />
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your nutrition dashboard...</p>
+        </div>
+      </div>
     )
-  } catch (error) {
-    // During build time or if there's an auth error, redirect to login
-    console.error('Main page error:', error)
-    redirect('/login')
   }
+
+  // Handle auth error or no user
+  if (!user) {
+    return null // Will redirect via useEffect
+  }
+
+  return (
+    <MainPageClient 
+      user={user}
+      initialMeals={todaysMeals}
+      initialMessages={chatMessages}
+    />
+  )
 } 
