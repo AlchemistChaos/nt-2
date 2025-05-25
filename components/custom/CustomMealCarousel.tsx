@@ -5,6 +5,7 @@ import { CarouselCard } from './CarouselCard'
 import { MealWithItems } from '@/types'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { sortMealsByTime, getMealTimeOrder } from '@/lib/utils'
 
 interface CustomMealCarouselProps {
   meals: MealWithItems[]
@@ -30,15 +31,71 @@ export function CustomMealCarousel({ meals, onMealUpdated, onMealDeleted }: Cust
     })
   }
 
-  // Generate placeholder cards to fill up to 10 slots
-  const placeholderTypes = ['breakfast', 'snack', 'lunch', 'snack', 'dinner', 'snack']
-  const totalSlots = 10
-  const placeholdersNeeded = Math.max(0, totalSlots - meals.length)
-  
-  const placeholders = Array.from({ length: placeholdersNeeded }, (_, index) => ({
-    id: `placeholder-${index}`,
-    type: placeholderTypes[index % placeholderTypes.length]
-  }))
+  // Create chronological meal slots
+  const createChronologicalSlots = () => {
+    const slots = []
+    const sortedMeals = sortMealsByTime(meals)
+    
+    // Group meals by type
+    const mealsByType = sortedMeals.reduce((acc, meal) => {
+      const mealType = meal.meal_type || 'snack'
+      if (!acc[mealType]) acc[mealType] = []
+      acc[mealType].push(meal)
+      return acc
+    }, {} as Record<string, MealWithItems[]>)
+
+    // Define the chronological order
+    const timeSlots = [
+      { type: 'breakfast', time: '8:00 AM' },
+      { type: 'snack', time: '10:00 AM', label: 'Morning Snack' },
+      { type: 'lunch', time: '12:00 PM' },
+      { type: 'snack', time: '3:00 PM', label: 'Afternoon Snack' },
+      { type: 'dinner', time: '6:00 PM' },
+      { type: 'snack', time: '8:00 PM', label: 'Evening Snack' }
+    ]
+
+    let snackIndex = 0
+    
+    for (const slot of timeSlots) {
+      if (slot.type === 'snack') {
+        // For snacks, show the next available snack or placeholder
+        const availableSnacks = mealsByType['snack'] || []
+        if (availableSnacks[snackIndex]) {
+          slots.push({
+            meal: availableSnacks[snackIndex],
+            isPlaceholder: false
+          })
+          snackIndex++
+        } else {
+          slots.push({
+            meal: null,
+            isPlaceholder: true,
+            mealType: 'snack',
+            label: slot.label
+          })
+        }
+      } else {
+        // For main meals, show the meal or placeholder
+        const mealsOfType = mealsByType[slot.type] || []
+        if (mealsOfType.length > 0) {
+          slots.push({
+            meal: mealsOfType[0], // Take the first (and usually only) meal of this type
+            isPlaceholder: false
+          })
+        } else {
+          slots.push({
+            meal: null,
+            isPlaceholder: true,
+            mealType: slot.type
+          })
+        }
+      }
+    }
+
+    return slots
+  }
+
+  const mealSlots = createChronologicalSlots()
 
   return (
     <div className="relative w-full">
@@ -75,22 +132,15 @@ export function CustomMealCarousel({ meals, onMealUpdated, onMealDeleted }: Cust
             msOverflowStyle: 'none',
           }}
         >
-          {/* Actual meals */}
-          {meals.map((meal) => (
-            <CarouselCard 
-              key={meal.id} 
-              meal={meal} 
+          {/* Chronological meal slots */}
+          {mealSlots.map((slot, index) => (
+            <CarouselCard
+              key={slot.meal?.id || `slot-${index}`}
+              meal={slot.meal || undefined}
+              isPlaceholder={slot.isPlaceholder}
+              mealType={slot.mealType}
               onMealUpdated={onMealUpdated}
               onMealDeleted={onMealDeleted}
-            />
-          ))}
-          
-          {/* Placeholder cards */}
-          {placeholders.map((placeholder) => (
-            <CarouselCard
-              key={placeholder.id}
-              isPlaceholder
-              mealType={placeholder.type}
             />
           ))}
         </div>

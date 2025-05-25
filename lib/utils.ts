@@ -36,3 +36,29 @@ export function getMealTypeFromTime(): string {
     return 'snack'
   }
 }
+
+export function getMealTimeOrder(mealType: string): number {
+  const mealTimes = {
+    'breakfast': 8,  // 8:00 AM
+    'lunch': 12,     // 12:00 PM  
+    'dinner': 18,    // 6:00 PM
+    'snack': 999     // Default for snacks (will be sorted by actual time)
+  }
+  return mealTimes[mealType as keyof typeof mealTimes] || 999
+}
+
+export function sortMealsByTime<T extends { meal_type?: string; logged_at?: string }>(meals: T[]): T[] {
+  return meals.sort((a, b) => {
+    const aOrder = getMealTimeOrder(a.meal_type || 'snack')
+    const bOrder = getMealTimeOrder(b.meal_type || 'snack')
+    
+    // If both are snacks, sort by actual logged time
+    if (aOrder === 999 && bOrder === 999) {
+      if (!a.logged_at || !b.logged_at) return 0
+      return new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()
+    }
+    
+    // Otherwise sort by meal time order
+    return aOrder - bOrder
+  })
+}
