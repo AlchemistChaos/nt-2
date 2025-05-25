@@ -100,8 +100,9 @@ export function useUserPreferences(userId: string) {
 }
 
 export function useTodaysMeals(userId: string) {
-  const today = new Date().toISOString().split('T')[0]
-  return useMealsForDate(userId, today)
+  const today = new Date()
+  const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  return useMealsForDate(userId, todayString)
 }
 
 export function useMealsForDate(userId: string, date: string) {
@@ -150,8 +151,9 @@ export function useChatMessages(userId: string, date: string, limit: number = 10
 }
 
 export function useTodaysDailyTarget(userId: string, options?: { enabled?: boolean }) {
-  const today = new Date().toISOString().split('T')[0]
-  return useDailyTargetForDate(userId, today, options)
+  const today = new Date()
+  const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  return useDailyTargetForDate(userId, todayString, options)
 }
 
 export function useDailyTargetForDate(userId: string, date: string, options?: { enabled?: boolean }) {
@@ -205,8 +207,9 @@ export function useUserDays(userId: string) {
       const allDates = new Set([...mealDates, ...chatDates])
       
       // Always include today, even if no data exists yet
-      const today = new Date().toISOString().split('T')[0]
-      allDates.add(today)
+      const today = new Date()
+      const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+      allDates.add(todayString)
       
       // Convert to array and sort (most recent first)
       const datesArray: string[] = Array.from(allDates) as string[]
@@ -331,7 +334,10 @@ export function useAddChatMessage() {
       date?: string // Optional, defaults to today
     }) => {
       const supabase = getSupabaseClient()
-      const messageDate = date || new Date().toISOString().split('T')[0]
+      const messageDate = date || (() => {
+        const today = new Date()
+        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+      })()
       
       const { data: message } = await supabase
         .from('chat_messages')
@@ -348,7 +354,10 @@ export function useAddChatMessage() {
     },
     onSuccess: (_data, variables) => {
       // Invalidate and refetch chat messages for the message date
-      const messageDate = variables.date || new Date().toISOString().split('T')[0]
+      const messageDate = variables.date || (() => {
+        const today = new Date()
+        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+      })()
       queryClient.invalidateQueries({ queryKey: queryKeys.chatMessages(variables.userId, messageDate, 20) })
       // Also invalidate user days to update the sidebar
       queryClient.invalidateQueries({ queryKey: queryKeys.userDays(variables.userId) })

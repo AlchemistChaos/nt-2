@@ -53,10 +53,19 @@ export function MainPageClient({ user }: MainPageClientProps) {
     const checkForNewDay = () => {
       const currentToday = getTodayDateString()
       
+      console.log('[Day Detection Debug]', {
+        selectedDate,
+        currentToday,
+        isPastDate: isPastDate(selectedDate),
+        shouldSwitch: selectedDate !== currentToday && isPastDate(selectedDate),
+        localTime: new Date().toLocaleString(),
+        utcTime: new Date().toISOString()
+      })
+      
       // If we're viewing a past date and it's now a new day, 
       // automatically switch to today
       if (selectedDate !== currentToday && isPastDate(selectedDate)) {
-        console.log('New day detected, switching to today:', currentToday)
+        console.log('🌅 New day detected, switching to today:', currentToday)
         setSelectedDate(currentToday)
         setShowDayTransition(true)
         
@@ -73,6 +82,7 @@ export function MainPageClient({ user }: MainPageClientProps) {
 
     // Also check when the window regains focus (user comes back to tab)
     const handleFocus = () => {
+      console.log('🔍 Window focus detected, checking for new day...')
       checkForNewDay()
     }
     

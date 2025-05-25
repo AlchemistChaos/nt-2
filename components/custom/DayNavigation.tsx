@@ -51,18 +51,28 @@ export function DayNavigation({
   const allDays = (() => {
     const days = [...userDays]
     
+    console.log('[DayNavigation Debug]', {
+      currentToday,
+      userDays,
+      selectedDate,
+      localTime: new Date().toLocaleString()
+    })
+    
     // Add today if it's not already in the list
     if (!days.includes(currentToday)) {
+      console.log('📅 Adding today to sidebar:', currentToday)
       days.unshift(currentToday)
     } else {
       // Move today to the front if it exists elsewhere
       const todayIndex = days.indexOf(currentToday)
       if (todayIndex > 0) {
+        console.log('📅 Moving today to front of sidebar:', currentToday)
         days.splice(todayIndex, 1)
         days.unshift(currentToday)
       }
     }
     
+    console.log('📅 Final sidebar days:', days)
     return days
   })()
 

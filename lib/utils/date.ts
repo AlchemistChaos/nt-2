@@ -24,14 +24,22 @@ export function formatDateForDisplay(dateString: string): string {
   }
 }
 
+// Helper function to format date in local timezone as YYYY-MM-DD
+function formatDateToLocalString(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export function getTodayDateString(): string {
-  return new Date().toISOString().split('T')[0]
+  return formatDateToLocalString(new Date())
 }
 
 export function getYesterdayDateString(): string {
   const yesterday = new Date()
   yesterday.setDate(yesterday.getDate() - 1)
-  return yesterday.toISOString().split('T')[0]
+  return formatDateToLocalString(yesterday)
 }
 
 export function isToday(dateString: string): boolean {
