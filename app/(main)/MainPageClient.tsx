@@ -6,7 +6,6 @@ import { User, MealWithItems, ChatMessage } from '@/types'
 import { CustomMealCarousel } from '@/components/custom/CustomMealCarousel'
 import { ChatMessage as ChatMessageComponent } from '@/components/custom/ChatMessage'
 import { ImageUploadButton } from '@/components/custom/ImageUploadButton'
-import { DailyProgress } from '@/components/custom/DailyProgress'
 import { DayNavigation } from '@/components/custom/DayNavigation'
 
 import { Button } from '@/components/ui/button'
@@ -373,16 +372,10 @@ export function MainPageClient({ user }: MainPageClientProps) {
         <div className="max-w-7xl mx-auto p-3 sm:p-6">
           <CustomMealCarousel 
             meals={meals} 
+            dailyTarget={dailyTarget || null}
             onMealUpdated={refreshMeals}
             onMealDeleted={refreshMeals}
           />
-        </div>
-      </div>
-
-      {/* Daily Progress Section */}
-      <div className="bg-gray-50 w-full">
-        <div className="max-w-7xl mx-auto p-3 sm:p-6">
-          <DailyProgress meals={meals} dailyTarget={dailyTarget || null} />
         </div>
       </div>
 
