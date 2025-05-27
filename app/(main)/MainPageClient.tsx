@@ -309,81 +309,79 @@ export function MainPageClient({ user }: MainPageClientProps) {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-3 sm:px-4 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            {/* Mobile menu button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="h-8 w-8 lg:hidden"
-              title="Toggle navigation"
-            >
-              <Calendar className="h-4 w-4" />
-            </Button>
-            <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">🥗 Nutrition Hero</h1>
-            <span className="text-xs sm:text-sm text-gray-500 hidden sm:block">Welcome, {user.name || user.email}</span>
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 px-3 sm:px-4 py-3">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              {/* Logo moved to replace mobile menu button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="h-8 w-8 lg:hidden"
+                title="Toggle navigation"
+              >
+                🥗
+              </Button>
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Today</h1>
+              <span className="text-xs sm:text-sm text-gray-500 hidden sm:block">Welcome, {user.name || user.email}</span>
+            </div>
+            <div className="flex items-center gap-1 sm:gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push('/library')}
+                title="Quick Add Library"
+                onMouseEnter={handlePrefetchLibrary}
+                className="h-8 w-8 sm:h-10 sm:w-10"
+              >
+                <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push('/goals')}
+                title="Goals & Profile"
+                onMouseEnter={handlePrefetchGoals}
+                className="h-8 w-8 sm:h-10 sm:w-10"
+              >
+                <Target className="h-4 w-4 sm:h-5 sm:w-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push('/preferences')}
+                className="h-8 w-8 sm:h-10 sm:w-10"
+              >
+                <Settings className="h-4 w-4 sm:h-5 sm:w-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleSignOut}
+                className="h-8 w-8 sm:h-10 sm:w-10"
+              >
+                <LogOut className="h-4 w-4 sm:h-5 sm:w-5" />
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-1 sm:gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push('/library')}
-              title="Quick Add Library"
-              onMouseEnter={handlePrefetchLibrary}
-              className="h-8 w-8 sm:h-10 sm:w-10"
-            >
-              <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push('/goals')}
-              title="Goals & Profile"
-              onMouseEnter={handlePrefetchGoals}
-              className="h-8 w-8 sm:h-10 sm:w-10"
-            >
-              <Target className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push('/preferences')}
-              className="h-8 w-8 sm:h-10 sm:w-10"
-            >
-              <Settings className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleSignOut}
-              className="h-8 w-8 sm:h-10 sm:w-10"
-            >
-              <LogOut className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Button>
+        </header>
+
+        {/* Meal Carousel Section - Full Width Background */}
+        <div className="bg-white border-b border-gray-200 w-full">
+          <div className="max-w-7xl mx-auto p-3 sm:p-6">
+            <CustomMealCarousel 
+              meals={meals} 
+              dailyTarget={dailyTarget || null}
+              onMealUpdated={refreshMeals}
+              onMealDeleted={refreshMeals}
+            />
           </div>
         </div>
-      </header>
 
-      {/* Meal Carousel Section - Full Width Background */}
-      <div className="bg-white border-b border-gray-200 w-full">
-        <div className="max-w-7xl mx-auto p-3 sm:p-6">
-          <CustomMealCarousel 
-            meals={meals} 
-            dailyTarget={dailyTarget || null}
-            onMealUpdated={refreshMeals}
-            onMealDeleted={refreshMeals}
-          />
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 max-w-7xl mx-auto w-full flex flex-col">
-        {/* Chat Section */}
+        {/* Main Content */}
         <div className="flex-1 flex flex-col">
-          {/* Messages */}
+          {/* Chat Section */}
           <div className="flex-1 overflow-y-auto px-3 sm:px-0">
             <div className="max-w-4xl mx-auto">
               {messages.map((message) => (
@@ -392,83 +390,71 @@ export function MainPageClient({ user }: MainPageClientProps) {
               <div ref={messagesEndRef} />
             </div>
           </div>
+        </div>
 
-          {/* Input Area */}
-          <div className="border-t border-gray-200 bg-white p-3 sm:p-4">
-            <div className="max-w-4xl mx-auto">
-              {isReadOnly ? (
-                <div className="mb-3 p-2 sm:p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs sm:text-sm text-yellow-800">
-                      📅 You&apos;re viewing {formatDateForDisplay(selectedDate)}. You can view past data but cannot send new messages.
-                    </span>
-                  </div>
+        {/* Input Area - Full Width */}
+        <div className="border-t border-gray-200 bg-white p-3 sm:p-4 w-full">
+          <div className="w-full">
+            {isReadOnly ? (
+              <div className="mb-3 p-2 sm:p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs sm:text-sm text-yellow-800">
+                    📅 You&apos;re viewing {formatDateForDisplay(selectedDate)}. You can view past data but cannot send new messages.
+                  </span>
                 </div>
-              ) : selectedDate === getTodayDateString() ? (
-                <div className="mb-3 p-2 sm:p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
-                    <span className="text-xs sm:text-sm text-green-800">
-                      🌟 You&apos;re on today&apos;s chat! Start logging meals or ask nutrition questions.
-                    </span>
-                  </div>
+              </div>
+            ) : null}
+            
+            {selectedImage && !isReadOnly && (
+              <div className="mb-3 p-2 sm:p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs sm:text-sm text-gray-600">Image selected</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedImage(null)}
+                    className="h-7 w-auto px-2 text-xs"
+                  >
+                    Remove
+                  </Button>
                 </div>
-              ) : null}
+              </div>
+            )}
+            
+            <div className="flex items-end gap-2 sm:gap-3">
+              <div className="flex-1">
+                <Input
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder={isReadOnly 
+                    ? `Viewing ${formatDateForDisplay(selectedDate)} - Switch to today to send messages`
+                    : "Ask about nutrition, log a meal, or upload a food photo..."
+                  }
+                  disabled={isLoading || isReadOnly}
+                  className="min-h-[44px] text-sm sm:text-base w-full"
+                />
+              </div>
               
-              {selectedImage && !isReadOnly && (
-                <div className="mb-3 p-2 sm:p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs sm:text-sm text-gray-600">Image selected</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedImage(null)}
-                      className="h-7 w-auto px-2 text-xs"
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                </div>
+              {!isReadOnly && (
+                <ImageUploadButton
+                  onImageSelect={setSelectedImage}
+                  disabled={isLoading}
+                />
               )}
               
-              <div className="flex items-end gap-2 sm:gap-3">
-                <div className="flex-1">
-                  <Input
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder={isReadOnly 
-                      ? `Viewing ${formatDateForDisplay(selectedDate)} - Switch to today to send messages`
-                      : "Ask about nutrition, log a meal, or upload a food photo..."
-                    }
-                    disabled={isLoading || isReadOnly}
-                    className="min-h-[44px] text-sm sm:text-base"
-                  />
-                </div>
-                
-                {!isReadOnly && (
-                  <ImageUploadButton
-                    onImageSelect={setSelectedImage}
-                    disabled={isLoading}
-                  />
-                )}
-                
-                <Button
-                  onClick={handleSendMessage}
-                  disabled={isLoading || (!inputMessage.trim() && !selectedImage) || isReadOnly}
-                  size="icon"
-                  className="h-11 w-11 touch-target"
-                >
-                  <Send className="h-4 w-4 sm:h-5 sm:w-5" />
-                </Button>
-              </div>
+              <Button
+                onClick={handleSendMessage}
+                disabled={isLoading || (!inputMessage.trim() && !selectedImage) || isReadOnly}
+                size="icon"
+                className="h-11 w-11 touch-target"
+              >
+                <Send className="h-4 w-4 sm:h-5 sm:w-5" />
+              </Button>
             </div>
           </div>
         </div>
       </div>
-      </div>
-
-
     </div>
   )
 } 

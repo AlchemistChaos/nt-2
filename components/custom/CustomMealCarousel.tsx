@@ -113,7 +113,23 @@ export function CustomMealCarousel({ meals, dailyTarget, onMealUpdated, onMealDe
     <div className="relative w-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-3 sm:mb-4">
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900">Today&apos;s Meals</h2>
+        <div className="flex items-center gap-3 sm:gap-4">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900">Meals</h2>
+          <div className="flex gap-3 sm:gap-4 text-xs sm:text-sm text-gray-600">
+            <div className="flex items-center gap-1">
+              <span className="font-medium">
+                {meals.filter(m => m.status === 'logged').length}
+              </span>
+              <span>logged</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="font-medium">
+                {meals.filter(m => m.status === 'planned').length}
+              </span>
+              <span>planned</span>
+            </div>
+          </div>
+        </div>
         <div className="flex gap-1 sm:gap-2">
           <Button
             variant="outline"
@@ -185,21 +201,7 @@ export function CustomMealCarousel({ meals, dailyTarget, onMealUpdated, onMealDe
         </div>
       </div>
 
-      {/* Summary stats - simplified */}
-      <div className="mt-3 sm:mt-4 flex flex-wrap gap-3 sm:gap-6 text-xs sm:text-sm text-gray-600">
-        <div className="flex items-center gap-1">
-          <span className="font-medium">
-            {meals.filter(m => m.status === 'logged').length}
-          </span>
-          <span>meals logged</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="font-medium">
-            {meals.filter(m => m.status === 'planned').length}
-          </span>
-          <span>meals planned</span>
-        </div>
-      </div>
+
     </div>
   )
 } 

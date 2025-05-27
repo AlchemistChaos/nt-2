@@ -115,8 +115,7 @@ export function DayNavigation({
   return (
     <div className="w-64 bg-gray-50 border-r border-gray-200 flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        <h2 className="font-semibold text-gray-900">Days</h2>
+      <div className="p-4 border-b border-gray-200 flex items-center justify-end">
         <Button
           variant="ghost"
           size="icon"
@@ -190,22 +189,7 @@ export function DayNavigation({
         )}
       </div>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-gray-200">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onDateSelect(currentToday)}
-          className={cn(
-            "w-full",
-            selectedDate === currentToday && "bg-green-50 border-green-200 text-green-700"
-          )}
-          disabled={selectedDate === currentToday}
-        >
-          <Clock className="h-4 w-4 mr-2" />
-          {selectedDate === currentToday ? "You're on Today" : "Go to Today"}
-        </Button>
-      </div>
+
     </div>
   )
 } 
