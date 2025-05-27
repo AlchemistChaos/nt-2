@@ -100,24 +100,24 @@ export function CustomMealCarousel({ meals, onMealUpdated, onMealDeleted }: Cust
   return (
     <div className="relative w-full">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">Today&apos;s Meals</h2>
-        <div className="flex gap-2">
+      <div className="flex items-center justify-between mb-3 sm:mb-4">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900">Today&apos;s Meals</h2>
+        <div className="flex gap-1 sm:gap-2">
           <Button
             variant="outline"
             size="icon"
             onClick={() => scroll('left')}
-            className="h-8 w-8"
+            className="h-7 w-7 sm:h-8 sm:w-8"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
           <Button
             variant="outline"
             size="icon"
             onClick={() => scroll('right')}
-            className="h-8 w-8"
+            className="h-7 w-7 sm:h-8 sm:w-8"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
         </div>
       </div>
@@ -126,7 +126,7 @@ export function CustomMealCarousel({ meals, onMealUpdated, onMealDeleted }: Cust
       <div className="relative overflow-hidden">
         <div
           ref={scrollContainerRef}
-          className="flex gap-4 overflow-x-auto scrollbar-hide pb-2"
+          className="flex gap-2 sm:gap-4 overflow-x-auto scrollbar-hide pb-2"
           style={{
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',
@@ -147,24 +147,24 @@ export function CustomMealCarousel({ meals, onMealUpdated, onMealDeleted }: Cust
       </div>
 
       {/* Summary stats */}
-      <div className="mt-4 flex gap-6 text-sm text-gray-600">
-        <div>
+      <div className="mt-3 sm:mt-4 flex flex-wrap gap-3 sm:gap-6 text-xs sm:text-sm text-gray-600">
+        <div className="flex items-center gap-1">
           <span className="font-medium">
             {meals.filter(m => m.status === 'logged').length}
           </span>
-          <span className="ml-1">meals logged</span>
+          <span>meals logged</span>
         </div>
-        <div>
+        <div className="flex items-center gap-1">
           <span className="font-medium">
             {meals.filter(m => m.status === 'planned').length}
           </span>
-          <span className="ml-1">meals planned</span>
+          <span>meals planned</span>
         </div>
-        <div>
+        <div className="flex items-center gap-1">
           <span className="font-medium">
             {meals.reduce((sum, meal) => sum + (meal.kcal_total || 0), 0)}
           </span>
-          <span className="ml-1">calories</span>
+          <span>calories</span>
         </div>
       </div>
 

@@ -58,9 +58,10 @@ export function ImageUploadButton({ onImageSelect, disabled }: ImageUploadButton
         size="icon"
         disabled={disabled}
         onClick={() => fileInputRef.current?.click()}
-        className="h-10 w-10 rounded-full"
+        className="h-11 w-11 touch-target"
+        title="Upload food photo"
       >
-        <Camera className="h-5 w-5" />
+        <Camera className="h-4 w-4 sm:h-5 sm:w-5" />
         <span className="sr-only">Upload image</span>
       </Button>
     </>

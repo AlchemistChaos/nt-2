@@ -23,31 +23,31 @@ export function DailyProgress({ meals, dailyTarget }: DailyProgressProps) {
   // If no daily target is set, show basic totals
   if (!dailyTarget) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
         <div className="flex items-center gap-2 mb-3">
-          <TrendingUp className="h-5 w-5 text-blue-600" />
-          <h3 className="font-semibold text-gray-900">Today's Progress</h3>
+          <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+          <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Today's Progress</h3>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gray-900">{totals.calories}</div>
-            <div className="text-sm text-gray-500">Calories</div>
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+            <div className="text-lg sm:text-2xl font-bold text-gray-900">{totals.calories}</div>
+            <div className="text-xs sm:text-sm text-gray-500">Calories</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gray-900">{totals.protein}g</div>
-            <div className="text-sm text-gray-500">Protein</div>
+          <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+            <div className="text-lg sm:text-2xl font-bold text-gray-900">{totals.protein}g</div>
+            <div className="text-xs sm:text-sm text-gray-500">Protein</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gray-900">{totals.carbs}g</div>
-            <div className="text-sm text-gray-500">Carbs</div>
+          <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+            <div className="text-lg sm:text-2xl font-bold text-gray-900">{totals.carbs}g</div>
+            <div className="text-xs sm:text-sm text-gray-500">Carbs</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gray-900">{totals.fat}g</div>
-            <div className="text-sm text-gray-500">Fat</div>
+          <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+            <div className="text-lg sm:text-2xl font-bold text-gray-900">{totals.fat}g</div>
+            <div className="text-xs sm:text-sm text-gray-500">Fat</div>
           </div>
         </div>
         <div className="mt-3 text-center">
-          <p className="text-sm text-gray-500">
+          <p className="text-xs sm:text-sm text-gray-500">
             Set your goals to track progress against targets
           </p>
         </div>
@@ -99,13 +99,13 @@ export function DailyProgress({ meals, dailyTarget }: DailyProgressProps) {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
+    <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
       <div className="flex items-center gap-2 mb-4">
-        <Target className="h-5 w-5 text-blue-600" />
-        <h3 className="font-semibold text-gray-900">Daily Progress</h3>
+        <Target className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+        <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Daily Progress</h3>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {dailyTarget.calories_target && (
           <ProgressBar
             current={totals.calories}
@@ -145,7 +145,7 @@ export function DailyProgress({ meals, dailyTarget }: DailyProgressProps) {
       
       {/* Overall progress summary */}
       <div className="mt-4 pt-4 border-t border-gray-100">
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center justify-between text-xs sm:text-sm">
           <span className="text-gray-600">Overall Progress:</span>
           <span className={`font-semibold ${
             calorieProgress >= 90 && calorieProgress <= 110 

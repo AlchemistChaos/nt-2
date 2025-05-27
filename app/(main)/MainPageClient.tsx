@@ -11,7 +11,7 @@ import { DayNavigation } from '@/components/custom/DayNavigation'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Send, LogOut, Settings, Target, BookOpen, Clock } from 'lucide-react'
+import { Send, LogOut, Settings, Target, BookOpen, Clock, Calendar } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useMealsForDate, useChatMessages, useDailyTargetForDate, queryKeys } from '@/lib/supabase/client-cache'
 import { useQueryClient } from '@tanstack/react-query'
@@ -26,7 +26,8 @@ interface MainPageClientProps {
 export function MainPageClient({ user }: MainPageClientProps) {
   // Date navigation state
   const [selectedDate, setSelectedDate] = useState(getTodayDateString())
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  // Start with sidebar collapsed on mobile, expanded on desktop
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   
   // Use React Query for date-aware data fetching
   const { data: meals = [] } = useMealsForDate(user.id, selectedDate)
@@ -46,6 +47,25 @@ export function MainPageClient({ user }: MainPageClientProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
   const router = useRouter()
+
+  // Initialize sidebar state based on screen size
+  useEffect(() => {
+    const handleResize = () => {
+      // Auto-expand sidebar on desktop (lg breakpoint = 1024px)
+      if (window.innerWidth >= 1024) {
+        setSidebarCollapsed(false)
+      } else {
+        setSidebarCollapsed(true)
+      }
+    }
+
+    // Set initial state
+    handleResize()
+
+    // Listen for resize events
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   // Sync local state with cached messages when date changes
   // Only sync when date actually changes to prevent infinite loops
@@ -268,34 +288,55 @@ export function MainPageClient({ user }: MainPageClientProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 flex relative">
+      {/* Mobile Overlay */}
+      {!sidebarCollapsed && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          onClick={() => setSidebarCollapsed(true)}
+        />
+      )}
+
       {/* Day Navigation Sidebar */}
-      <DayNavigation
-        userId={user.id}
-        selectedDate={selectedDate}
-        onDateSelect={setSelectedDate}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
+      <div className={`${sidebarCollapsed ? '' : 'fixed lg:relative'} z-50 lg:z-auto`}>
+        <DayNavigation
+          userId={user.id}
+          selectedDate={selectedDate}
+          onDateSelect={setSelectedDate}
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
+      </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3">
+      <header className="bg-white border-b border-gray-200 px-3 sm:px-4 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-gray-900">🥗 Nutrition Hero</h1>
-            <span className="text-sm text-gray-500">Welcome, {user.name || user.email}</span>
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {/* Mobile menu button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="h-8 w-8 lg:hidden"
+              title="Toggle navigation"
+            >
+              <Calendar className="h-4 w-4" />
+            </Button>
+            <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">🥗 Nutrition Hero</h1>
+            <span className="text-xs sm:text-sm text-gray-500 hidden sm:block">Welcome, {user.name || user.email}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => router.push('/library')}
               title="Quick Add Library"
               onMouseEnter={handlePrefetchLibrary}
+              className="h-8 w-8 sm:h-10 sm:w-10"
             >
-              <BookOpen className="h-5 w-5" />
+              <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
             <Button
               variant="ghost"
@@ -303,22 +344,25 @@ export function MainPageClient({ user }: MainPageClientProps) {
               onClick={() => router.push('/goals')}
               title="Goals & Profile"
               onMouseEnter={handlePrefetchGoals}
+              className="h-8 w-8 sm:h-10 sm:w-10"
             >
-              <Target className="h-5 w-5" />
+              <Target className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => router.push('/preferences')}
+              className="h-8 w-8 sm:h-10 sm:w-10"
             >
-              <Settings className="h-5 w-5" />
+              <Settings className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
               onClick={handleSignOut}
+              className="h-8 w-8 sm:h-10 sm:w-10"
             >
-              <LogOut className="h-5 w-5" />
+              <LogOut className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
           </div>
         </div>
@@ -326,7 +370,7 @@ export function MainPageClient({ user }: MainPageClientProps) {
 
       {/* Meal Carousel Section - Full Width Background */}
       <div className="bg-white border-b border-gray-200 w-full">
-        <div className="max-w-7xl mx-auto p-6">
+        <div className="max-w-7xl mx-auto p-3 sm:p-6">
           <CustomMealCarousel 
             meals={meals} 
             onMealUpdated={refreshMeals}
@@ -337,7 +381,7 @@ export function MainPageClient({ user }: MainPageClientProps) {
 
       {/* Daily Progress Section */}
       <div className="bg-gray-50 w-full">
-        <div className="max-w-7xl mx-auto p-6">
+        <div className="max-w-7xl mx-auto p-3 sm:p-6">
           <DailyProgress meals={meals} dailyTarget={dailyTarget || null} />
         </div>
       </div>
@@ -347,7 +391,7 @@ export function MainPageClient({ user }: MainPageClientProps) {
         {/* Chat Section */}
         <div className="flex-1 flex flex-col">
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto px-3 sm:px-0">
             <div className="max-w-4xl mx-auto">
               {messages.map((message) => (
                 <ChatMessageComponent key={message.id} message={message} />
@@ -357,21 +401,21 @@ export function MainPageClient({ user }: MainPageClientProps) {
           </div>
 
           {/* Input Area */}
-          <div className="border-t border-gray-200 bg-white p-4">
+          <div className="border-t border-gray-200 bg-white p-3 sm:p-4">
             <div className="max-w-4xl mx-auto">
               {isReadOnly ? (
-                <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="mb-3 p-2 sm:p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-yellow-800">
+                    <span className="text-xs sm:text-sm text-yellow-800">
                       📅 You&apos;re viewing {formatDateForDisplay(selectedDate)}. You can view past data but cannot send new messages.
                     </span>
                   </div>
                 </div>
               ) : selectedDate === getTodayDateString() ? (
-                <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div className="mb-3 p-2 sm:p-3 bg-green-50 border border-green-200 rounded-lg">
                   <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-green-600" />
-                    <span className="text-sm text-green-800">
+                    <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
+                    <span className="text-xs sm:text-sm text-green-800">
                       🌟 You&apos;re on today&apos;s chat! Start logging meals or ask nutrition questions.
                     </span>
                   </div>
@@ -379,13 +423,14 @@ export function MainPageClient({ user }: MainPageClientProps) {
               ) : null}
               
               {selectedImage && !isReadOnly && (
-                <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+                <div className="mb-3 p-2 sm:p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Image selected</span>
+                    <span className="text-xs sm:text-sm text-gray-600">Image selected</span>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => setSelectedImage(null)}
+                      className="h-7 w-auto px-2 text-xs"
                     >
                       Remove
                     </Button>
@@ -393,7 +438,7 @@ export function MainPageClient({ user }: MainPageClientProps) {
                 </div>
               )}
               
-              <div className="flex items-end gap-3">
+              <div className="flex items-end gap-2 sm:gap-3">
                 <div className="flex-1">
                   <Input
                     value={inputMessage}
@@ -404,7 +449,7 @@ export function MainPageClient({ user }: MainPageClientProps) {
                       : "Ask about nutrition, log a meal, or upload a food photo..."
                     }
                     disabled={isLoading || isReadOnly}
-                    className="min-h-[44px]"
+                    className="min-h-[44px] text-sm sm:text-base"
                   />
                 </div>
                 
@@ -419,9 +464,9 @@ export function MainPageClient({ user }: MainPageClientProps) {
                   onClick={handleSendMessage}
                   disabled={isLoading || (!inputMessage.trim() && !selectedImage) || isReadOnly}
                   size="icon"
-                  className="h-11 w-11"
+                  className="h-11 w-11 touch-target"
                 >
-                  <Send className="h-5 w-5" />
+                  <Send className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
               </div>
             </div>
