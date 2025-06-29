@@ -29,9 +29,18 @@ export function MainPageClient({ user }: MainPageClientProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   
   // Use React Query for date-aware data fetching
-  const { data: meals = [] } = useMealsForDate(user.id, selectedDate)
-  const { data: cachedMessages = [] } = useChatMessages(user.id, selectedDate, 20)
+  const { data: meals = [], isLoading: mealsLoading, error: mealsError } = useMealsForDate(user.id, selectedDate)
+  const { data: cachedMessages = [], isLoading: messagesLoading } = useChatMessages(user.id, selectedDate, 20)
   const { data: dailyTarget } = useDailyTargetForDate(user.id, selectedDate)
+  
+  // Debug meals data
+  console.log('Meals debug:', {
+    mealsCount: meals.length,
+    mealsLoading,
+    mealsError,
+    selectedDate,
+    userId: user.id
+  })
   const queryClient = useQueryClient()
   
   // Use local state for real-time updates, but sync with cached messages
@@ -74,6 +83,7 @@ export function MainPageClient({ user }: MainPageClientProps) {
   const prevSelectedDate = useRef<string>(selectedDate)
   useEffect(() => {
     if (selectedDate !== prevSelectedDate.current) {
+      console.log('Date changed, loading messages for:', selectedDate)
       // Clear messages immediately when date changes to avoid showing old messages
       setMessages([])
       // Then set the new messages for the selected date
@@ -84,14 +94,16 @@ export function MainPageClient({ user }: MainPageClientProps) {
     }
   }, [selectedDate, cachedMessages])
 
-  // Initialize messages on first load
+  // Sync cached messages with local state (handle both initial load and updates)
   useEffect(() => {
-    if (messages.length === 0 && cachedMessages.length > 0) {
+    // Only update if we don't have any messages locally, or if messages are loading
+    if ((messages.length === 0 && cachedMessages.length > 0) || (!messagesLoading && cachedMessages.length > 0 && messages.length === 0)) {
+      console.log('Syncing cached messages to local state:', cachedMessages.length)
       setMessages(cachedMessages)
       // Don't auto-scroll when loading cached messages
       setShouldAutoScroll(false)
     }
-  }, [cachedMessages, messages.length])
+  }, [cachedMessages, messagesLoading]) // React to both cached messages and loading state changes
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -106,8 +118,12 @@ export function MainPageClient({ user }: MainPageClientProps) {
   }, [messages, shouldAutoScroll])
 
   const refreshMeals = async () => {
+    console.log('Refreshing meals for date:', selectedDate)
     // Use React Query to invalidate and refetch meals data for selected date
     await queryClient.invalidateQueries({ queryKey: queryKeys.mealsForDate(user.id, selectedDate) })
+    // Also force a refetch to ensure data is up to date
+    await queryClient.refetchQueries({ queryKey: queryKeys.mealsForDate(user.id, selectedDate) })
+    console.log('Meals refreshed')
   }
 
   const refreshMessages = async () => {
@@ -266,8 +282,14 @@ export function MainPageClient({ user }: MainPageClientProps) {
                   console.log('Action received:', parsed.action)
                   // Refresh meals if needed
                   if (parsed.action.type === 'meal_logged' || parsed.action.type === 'meal_planned' || parsed.action.type === 'meal_updated') {
-                    // Refresh meals data properly instead of reloading page
-                    await refreshMeals()
+                    // Add a small delay to ensure database write is complete
+                    setTimeout(async () => {
+                      try {
+                        await refreshMeals()
+                      } catch (error) {
+                        console.error('Error refreshing meals:', error)
+                      }
+                    }, 500) // 500ms delay
                   }
                 }
               } catch {
