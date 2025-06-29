@@ -10,6 +10,7 @@ import { EditMealModal } from './EditMealModal'
 
 interface CarouselCardProps {
   meal?: MealWithItems
+  meals?: MealWithItems[]
   isPlaceholder?: boolean
   mealType?: string
   onMealUpdated?: () => void
@@ -18,6 +19,7 @@ interface CarouselCardProps {
 
 export function CarouselCard({ 
   meal, 
+  meals,
   isPlaceholder, 
   mealType, 
   onMealUpdated,
@@ -26,13 +28,28 @@ export function CarouselCard({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const handleDelete = async () => {
-    if (!meal || isDeleting) return
+  // Use meals array or fallback to single meal
+  const mealsList = meals || (meal ? [meal] : [])
+  const hasMeals = mealsList.length > 0
+
+  // Aggregate nutrition data from all meals of this type
+  const aggregatedData = mealsList.reduce(
+    (acc, m) => ({
+      calories: acc.calories + (m.kcal_total || 0),
+      protein: acc.protein + (m.g_protein || 0),
+      carbs: acc.carbs + (m.g_carb || 0),
+      fat: acc.fat + (m.g_fat || 0),
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  )
+
+  const handleDelete = async (mealToDelete: MealWithItems) => {
+    if (isDeleting) return
     
     if (confirm('Are you sure you want to delete this meal?')) {
       setIsDeleting(true)
       try {
-        const success = await deleteMeal(meal.id)
+        const success = await deleteMeal(mealToDelete.id)
         if (success) {
           onMealDeleted?.()
         } else {
@@ -47,7 +64,9 @@ export function CarouselCard({
     }
   }
 
-  const handleEdit = () => {
+  const handleEdit = (mealToEdit: MealWithItems) => {
+    // For now, we'll edit the first meal, but this could be expanded
+    // to show a list of meals to choose from
     setIsEditModalOpen(true)
   }
 
@@ -68,99 +87,111 @@ export function CarouselCard({
     )
   }
 
-  if (!meal) return null
+  if (!hasMeals && !isPlaceholder) return null
 
-  const isPlanned = meal.status === 'planned'
+  const hasPlannedMeals = mealsList.some(m => m.status === 'planned')
+  const hasLoggedMeals = mealsList.some(m => m.status === 'logged')
+  const firstMeal = mealsList[0] // For edit modal
 
   return (
     <>
-      <Card className="min-w-[150px] sm:min-w-[210px] h-[80px] sm:h-[100px] bg-white shadow-sm hover:shadow-md transition-shadow relative group">
+      <Card className="min-w-[150px] sm:min-w-[210px] h-[120px] sm:h-[140px] bg-white shadow-sm hover:shadow-md transition-shadow relative group">
         <CardContent className="p-2 sm:p-3 h-full flex flex-col">
-          {/* Action buttons - show on hover */}
-          <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={handleEdit}
-              className="p-0.5 bg-white rounded-full shadow-md hover:bg-gray-50 transition-colors"
-              title="Edit meal"
-            >
-              <Edit3 className="h-2.5 w-2.5 text-gray-600" />
-            </button>
-            <button
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="p-0.5 bg-white rounded-full shadow-md hover:bg-red-50 transition-colors disabled:opacity-50"
-              title="Delete meal"
-            >
-              <X className="h-2.5 w-2.5 text-red-600" />
-            </button>
-          </div>
+          {/* Action buttons - show on hover, only if we have meals */}
+          {hasMeals && (
+            <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {firstMeal && (
+                <button
+                  onClick={() => handleEdit(firstMeal)}
+                  className="p-0.5 bg-white rounded-full shadow-md hover:bg-gray-50 transition-colors"
+                  title="Edit meal"
+                >
+                  <Edit3 className="h-2.5 w-2.5 text-gray-600" />
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Header */}
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-1">
               <Utensils className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-gray-600" />
               <span className="text-xs font-medium text-gray-600 capitalize">
-                {meal.meal_type || 'Meal'}
+                {mealType || 'Meal'}
               </span>
             </div>
-            {isPlanned && (
-              <span className="text-xs bg-blue-100 text-blue-700 px-1 py-0.5 rounded-full">
-                Planned
-              </span>
-            )}
+            <div className="flex gap-1">
+              {hasPlannedMeals && (
+                <span className="text-xs bg-blue-100 text-blue-700 px-1 py-0.5 rounded-full">
+                  {mealsList.filter(m => m.status === 'planned').length} planned
+                </span>
+              )}
+              {hasLoggedMeals && (
+                <span className="text-xs bg-green-100 text-green-700 px-1 py-0.5 rounded-full">
+                  {mealsList.filter(m => m.status === 'logged').length} logged
+                </span>
+              )}
+            </div>
           </div>
 
-          {/* Image or placeholder */}
-          <div className="flex-1 mb-1">
-            {meal.image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={meal.image_url}
-                alt={meal.meal_name || 'Meal'}
-                className="w-full h-8 sm:h-10 object-cover rounded-md"
-              />
+          {/* Meal Items List */}
+          <div className="flex-1 mb-1 overflow-y-auto">
+            {hasMeals ? (
+              <div className="space-y-1">
+                {mealsList.map((singleMeal, index) => (
+                  <div key={singleMeal.id} className="flex items-center justify-between bg-gray-50 rounded p-1">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium truncate">
+                        {singleMeal.meal_name || 'Unnamed meal'}
+                      </div>
+                      <div className="text-xs text-gray-500 flex items-center gap-1">
+                        <Clock className="h-2 w-2" />
+                        <span>{formatTime(singleMeal.logged_at)}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDelete(singleMeal)}
+                      disabled={isDeleting}
+                      className="p-0.5 hover:bg-red-100 rounded transition-colors disabled:opacity-50"
+                      title="Delete meal"
+                    >
+                      <X className="h-3 w-3 text-red-500" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             ) : (
-              <div className="w-full h-8 sm:h-10 bg-gray-100 rounded-md flex items-center justify-center">
+              <div className="w-full h-full bg-gray-100 rounded-md flex items-center justify-center">
                 <Utensils className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
               </div>
             )}
           </div>
 
-          {/* Meal info */}
-          <div className="space-y-0.5">
-            <h3 className="font-medium text-xs line-clamp-1">
-              {meal.meal_name || 'Unnamed meal'}
-            </h3>
-            
-            <div className="flex items-center gap-1 text-xs text-gray-500">
-              <Clock className="h-2.5 w-2.5" />
-              <span>{formatTime(meal.logged_at)}</span>
-            </div>
-
-            {/* Nutrition info - only show for logged meals */}
-            {!isPlanned && (meal.kcal_total || meal.g_protein) && (
+          {/* Aggregated Nutrition Info */}
+          {hasMeals && hasLoggedMeals && (
+            <div className="border-t pt-1">
+              <div className="text-xs font-medium text-gray-700 mb-0.5">Total:</div>
               <div className="flex gap-2 text-xs">
-                {meal.kcal_total && (
+                {aggregatedData.calories > 0 && (
                   <span className="text-gray-600">
-                    {meal.kcal_total} cal
+                    {aggregatedData.calories} cal
                   </span>
                 )}
-                {meal.g_protein && (
+                {aggregatedData.protein > 0 && (
                   <span className="text-gray-600">
-                    {meal.g_protein}g protein
+                    {aggregatedData.protein}g protein
                   </span>
                 )}
-
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Edit Modal */}
-      {isEditModalOpen && meal && (
+      {/* Edit Modal - only show for the first meal */}
+      {isEditModalOpen && firstMeal && (
         <EditMealModal
-          meal={meal}
+          meal={firstMeal}
           isOpen={isEditModalOpen}
           onClose={() => setIsEditModalOpen(false)}
           onMealUpdated={handleMealUpdated}

@@ -5,7 +5,6 @@ import { CarouselCard } from './CarouselCard'
 import { MealWithItems, DailyTarget } from '@/types'
 import { ChevronLeft, ChevronRight, Zap, Beef, Wheat, Droplets } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { sortMealsByTime, getMealTimeOrder } from '@/lib/utils'
 
 interface CustomMealCarouselProps {
   meals: MealWithItems[]
@@ -15,18 +14,19 @@ interface CustomMealCarouselProps {
 }
 
 export function CustomMealCarousel({ meals, dailyTarget, onMealUpdated, onMealDeleted }: CustomMealCarouselProps) {
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const mainMealScrollRef = useRef<HTMLDivElement>(null)
+  const snackScrollRef = useRef<HTMLDivElement>(null)
 
-  const scroll = (direction: 'left' | 'right') => {
-    if (!scrollContainerRef.current) return
+  const scroll = (direction: 'left' | 'right', containerRef: React.RefObject<HTMLDivElement | null>) => {
+    if (!containerRef.current) return
     
     const scrollAmount = 300
-    const currentScroll = scrollContainerRef.current.scrollLeft
+    const currentScroll = containerRef.current.scrollLeft
     const targetScroll = direction === 'left' 
       ? currentScroll - scrollAmount 
       : currentScroll + scrollAmount
 
-    scrollContainerRef.current.scrollTo({
+    containerRef.current.scrollTo({
       left: targetScroll,
       behavior: 'smooth'
     })
@@ -43,71 +43,35 @@ export function CustomMealCarousel({ meals, dailyTarget, onMealUpdated, onMealDe
     { calories: 0, protein: 0, carbs: 0, fat: 0 }
   )
 
-  // Create chronological meal slots
-  const createChronologicalSlots = () => {
-    const slots = []
-    const sortedMeals = sortMealsByTime(meals)
-    
-    // Group meals by type
-    const mealsByType = sortedMeals.reduce((acc, meal) => {
+  // Group meals by type
+  const groupMealsByType = () => {
+    const grouped = meals.reduce((acc, meal) => {
       const mealType = meal.meal_type || 'snack'
       if (!acc[mealType]) acc[mealType] = []
       acc[mealType].push(meal)
       return acc
     }, {} as Record<string, MealWithItems[]>)
 
-    // Define the chronological order
-    const timeSlots = [
-      { type: 'breakfast', time: '8:00 AM' },
-      { type: 'snack', time: '10:00 AM', label: 'Morning Snack' },
-      { type: 'lunch', time: '12:00 PM' },
-      { type: 'snack', time: '3:00 PM', label: 'Afternoon Snack' },
-      { type: 'dinner', time: '6:00 PM' },
-      { type: 'snack', time: '8:00 PM', label: 'Evening Snack' }
-    ]
+    // Create meal type cards for main meals
+    const mainMealTypes = ['breakfast', 'lunch', 'dinner']
+    const mainMealCards = mainMealTypes.map(type => ({
+      type,
+      meals: grouped[type] || [],
+      isPlaceholder: !grouped[type] || grouped[type].length === 0
+    }))
 
-    let snackIndex = 0
-    
-    for (const slot of timeSlots) {
-      if (slot.type === 'snack') {
-        // For snacks, show the next available snack or placeholder
-        const availableSnacks = mealsByType['snack'] || []
-        if (availableSnacks[snackIndex]) {
-          slots.push({
-            meal: availableSnacks[snackIndex],
-            isPlaceholder: false
-          })
-          snackIndex++
-        } else {
-          slots.push({
-            meal: null,
-            isPlaceholder: true,
-            mealType: 'snack',
-            label: slot.label
-          })
-        }
-      } else {
-        // For main meals, show the meal or placeholder
-        const mealsOfType = mealsByType[slot.type] || []
-        if (mealsOfType.length > 0) {
-          slots.push({
-            meal: mealsOfType[0], // Take the first (and usually only) meal of this type
-            isPlaceholder: false
-          })
-        } else {
-          slots.push({
-            meal: null,
-            isPlaceholder: true,
-            mealType: slot.type
-          })
-        }
-      }
-    }
+    // Create snack cards - group all snacks together
+    const snackMeals = grouped['snack'] || []
+    const snackCards = [{
+      type: 'snack',
+      meals: snackMeals,
+      isPlaceholder: snackMeals.length === 0
+    }]
 
-    return slots
+    return { mainMealCards, snackCards }
   }
 
-  const mealSlots = createChronologicalSlots()
+  const { mainMealCards, snackCards } = groupMealsByType()
 
   return (
     <div className="relative w-full">
@@ -130,47 +94,99 @@ export function CustomMealCarousel({ meals, dailyTarget, onMealUpdated, onMealDe
             </div>
           </div>
         </div>
-        <div className="flex gap-1 sm:gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => scroll('left')}
-            className="h-7 w-7 sm:h-8 sm:w-8"
+      </div>
+
+      {/* Main Meals Row (Breakfast, Lunch, Dinner) */}
+      <div className="relative mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-medium text-gray-700">Main Meals</h3>
+          <div className="flex gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => scroll('left', mainMealScrollRef)}
+              className="h-6 w-6"
+            >
+              <ChevronLeft className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => scroll('right', mainMealScrollRef)}
+              className="h-6 w-6"
+            >
+              <ChevronRight className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+        
+        <div className="relative overflow-hidden">
+          <div
+            ref={mainMealScrollRef}
+            className="flex gap-2 sm:gap-4 overflow-x-auto scrollbar-hide pb-2"
+            style={{
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+            }}
           >
-            <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => scroll('right')}
-            className="h-7 w-7 sm:h-8 sm:w-8"
-          >
-            <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4" />
-          </Button>
+            {mainMealCards.map((mealCard) => (
+              <CarouselCard
+                key={mealCard.type}
+                mealType={mealCard.type}
+                meals={mealCard.meals}
+                isPlaceholder={mealCard.isPlaceholder}
+                onMealUpdated={onMealUpdated}
+                onMealDeleted={onMealDeleted}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Carousel */}
-      <div className="relative overflow-hidden">
-        <div
-          ref={scrollContainerRef}
-          className="flex gap-2 sm:gap-4 overflow-x-auto scrollbar-hide pb-2"
-          style={{
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-          }}
-        >
-          {/* Chronological meal slots */}
-          {mealSlots.map((slot, index) => (
-            <CarouselCard
-              key={slot.meal?.id || `slot-${index}`}
-              meal={slot.meal || undefined}
-              isPlaceholder={slot.isPlaceholder}
-              mealType={slot.mealType}
-              onMealUpdated={onMealUpdated}
-              onMealDeleted={onMealDeleted}
-            />
-          ))}
+      {/* Snacks Row */}
+      <div className="relative mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-medium text-gray-700">Snacks</h3>
+          <div className="flex gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => scroll('left', snackScrollRef)}
+              className="h-6 w-6"
+            >
+              <ChevronLeft className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => scroll('right', snackScrollRef)}
+              className="h-6 w-6"
+            >
+              <ChevronRight className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+        
+        <div className="relative overflow-hidden">
+          <div
+            ref={snackScrollRef}
+            className="flex gap-2 sm:gap-4 overflow-x-auto scrollbar-hide pb-2"
+            style={{
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+            }}
+          >
+            {snackCards.map((mealCard, index) => (
+              <CarouselCard
+                key={`snack-${index}`}
+                mealType={mealCard.type}
+                meals={mealCard.meals}
+                isPlaceholder={mealCard.isPlaceholder}
+                onMealUpdated={onMealUpdated}
+                onMealDeleted={onMealDeleted}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
@@ -200,8 +216,6 @@ export function CustomMealCarousel({ meals, dailyTarget, onMealUpdated, onMealDe
           <div className="text-xs text-gray-500">Fat</div>
         </div>
       </div>
-
-
     </div>
   )
 } 
