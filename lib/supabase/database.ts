@@ -1,5 +1,5 @@
 import { createClient } from './server'
-import { User, Preference, Meal, MealItem, ChatMessage, MealWithItems, Biometric, Goal, DailyTarget } from '@/types'
+import { User, Preference, Meal, MealItem, ChatMessage, MealWithItems, Biometric, Goal, DailyTarget, Brand, BrandMenuItem } from '@/types'
 
 export async function getCurrentUser(): Promise<User | null> {
   const supabase = await createClient()
@@ -147,16 +147,21 @@ export async function getChatMessages(userId: string, limit: number = 10): Promi
 export async function addChatMessage(
   userId: string,
   role: 'user' | 'assistant',
-  content: string
+  content: string,
+  date?: string
 ): Promise<ChatMessage | null> {
   const supabase = await createClient()
+  
+  // Use provided date or current date
+  const messageDate = date || new Date().toISOString().split('T')[0]
   
   const { data: message } = await supabase
     .from('chat_messages')
     .insert({
       user_id: userId,
       role,
-      content
+      content,
+      date: messageDate
     })
     .select()
     .single()
@@ -323,4 +328,160 @@ export async function acceptDailyTarget(userId: string, date: string): Promise<D
     .single()
 
   return target
+}
+
+// Brand functions
+export async function getAllBrands(): Promise<Brand[]> {
+  const supabase = await createClient()
+  
+  const { data: brands } = await supabase
+    .from('brands')
+    .select('*')
+    .order('name', { ascending: true })
+
+  return brands || []
+}
+
+export async function getBrandByName(name: string): Promise<Brand | null> {
+  const supabase = await createClient()
+  
+  const { data: brand } = await supabase
+    .from('brands')
+    .select('*')
+    .ilike('name', name)
+    .single()
+
+  return brand
+}
+
+export async function createBrand(
+  name: string,
+  type: string,
+  description?: string
+): Promise<Brand | null> {
+  const supabase = await createClient()
+  
+  const { data: brand } = await supabase
+    .from('brands')
+    .insert({
+      name,
+      type,
+      description
+    })
+    .select()
+    .single()
+
+  return brand
+}
+
+export async function createBrandIfNotExists(
+  name: string,
+  type: string,
+  description?: string
+): Promise<Brand> {
+  let brand = await getBrandByName(name)
+  
+  if (!brand) {
+    brand = await createBrand(name, type, description)
+    if (!brand) {
+      throw new Error(`Failed to create brand: ${name}`)
+    }
+  }
+  
+  return brand
+}
+
+// Brand menu items functions
+export async function getBrandMenuItems(brandId: string): Promise<BrandMenuItem[]> {
+  const supabase = await createClient()
+  
+  const { data: items } = await supabase
+    .from('brand_menu_items')
+    .select(`
+      *,
+      brand:brands(*)
+    `)
+    .eq('brand_id', brandId)
+    .eq('is_available', true)
+    .order('category', { ascending: true })
+    .order('name', { ascending: true })
+
+  return items || []
+}
+
+export async function createBrandMenuItems(
+  userId: string,
+  brandId: string,
+  items: Omit<BrandMenuItem, 'id' | 'brand_id' | 'imported_by' | 'created_at' | 'updated_at'>[],
+  importSource: 'csv' | 'image' | 'manual',
+  batchId?: string
+): Promise<BrandMenuItem[]> {
+  const supabase = await createClient()
+  
+  const importBatchId = batchId || crypto.randomUUID()
+  
+  const { data: menuItems } = await supabase
+    .from('brand_menu_items')
+    .insert(
+      items.map(item => ({
+        brand_id: brandId,
+        imported_by: userId,
+        import_source: importSource,
+        import_batch_id: importBatchId,
+        ...item
+      }))
+    )
+    .select(`
+      *,
+      brand:brands(*)
+    `)
+
+  return menuItems || []
+}
+
+export async function updateBrandMenuItem(
+  itemId: string,
+  updates: Partial<BrandMenuItem>
+): Promise<BrandMenuItem | null> {
+  const supabase = await createClient()
+  
+  const { data: item } = await supabase
+    .from('brand_menu_items')
+    .update(updates)
+    .eq('id', itemId)
+    .select(`
+      *,
+      brand:brands(*)
+    `)
+    .single()
+
+  return item
+}
+
+export async function deleteBrandMenuItem(itemId: string): Promise<boolean> {
+  const supabase = await createClient()
+  
+  const { error } = await supabase
+    .from('brand_menu_items')
+    .delete()
+    .eq('id', itemId)
+
+  return !error
+}
+
+export async function searchBrandMenuItems(query: string): Promise<BrandMenuItem[]> {
+  const supabase = await createClient()
+  
+  const { data: items } = await supabase
+    .from('brand_menu_items')
+    .select(`
+      *,
+      brand:brands(*)
+    `)
+    .or(`name.ilike.%${query}%,description.ilike.%${query}%`)
+    .eq('is_available', true)
+    .order('name', { ascending: true })
+    .limit(20)
+
+  return items || []
 } 

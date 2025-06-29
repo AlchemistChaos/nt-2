@@ -1,7 +1,7 @@
 import { createBrowserClient } from '@supabase/ssr'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { User, Preference, MealWithItems, ChatMessage, DailyTarget, Brand, SavedItem, SupplementSchedule, Biometric, Goal } from '@/types'
+import { User, Preference, MealWithItems, ChatMessage, DailyTarget, Brand, Biometric, Goal, BrandMenuItem } from '@/types'
 
 // Create a singleton Supabase client for browser use
 let supabaseClient: ReturnType<typeof createBrowserClient> | null = null
@@ -28,10 +28,9 @@ export const queryKeys = {
   dailyTargetForDate: (userId: string, date: string) => ['dailyTargetForDate', userId, date] as const,
   userDays: (userId: string) => ['userDays', userId] as const,
   brands: ['brands'] as const,
-  savedItems: (userId: string) => ['savedItems', userId] as const,
-  supplementSchedules: (userId: string) => ['supplementSchedules', userId] as const,
   latestBiometric: (userId: string) => ['latestBiometric', userId] as const,
   activeGoal: (userId: string) => ['activeGoal', userId] as const,
+  brandMenuItems: (brandId: string) => ['brandMenuItems', brandId] as const,
 }
 
 // Client-side data fetching hooks with caching
@@ -396,165 +395,35 @@ export function useBrands(options?: { enabled?: boolean }) {
   });
 }
 
-export function useSavedItems(userId: string, options?: { enabled?: boolean }) {
+
+
+
+
+export function useBrandMenuItems(brandId: string, options?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: queryKeys.savedItems(userId),
-    queryFn: async (): Promise<SavedItem[]> => {
+    queryKey: queryKeys.brandMenuItems(brandId),
+    queryFn: async (): Promise<BrandMenuItem[]> => {
       const supabase = getSupabaseClient()
       const { data: items } = await supabase
-        .from('saved_items')
+        .from('brand_menu_items')
         .select(`
           *,
           brand:brands(*)
         `)
-        .eq('user_id', userId)
-        .order('times_used', { ascending: false })
+        .eq('brand_id', brandId)
+        .eq('is_available', true)
+        .order('category', { ascending: true })
+        .order('name', { ascending: true })
 
       return items || []
     },
-    enabled: (options?.enabled ?? true) && !!userId,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 5 * 60 * 1000, // 5 minutes
-  })
-}
-
-export function useSupplementSchedules(userId: string, options?: { enabled?: boolean }) {
-  return useQuery({
-    queryKey: queryKeys.supplementSchedules(userId),
-    queryFn: async (): Promise<SupplementSchedule[]> => {
-      const supabase = getSupabaseClient()
-      const { data: schedules } = await supabase
-        .from('supplement_schedules')
-        .select(`
-          *,
-          saved_item:saved_items(
-            *,
-            brand:brands(*)
-          )
-        `)
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-
-      return schedules || []
-    },
-    enabled: (options?.enabled ?? true) && !!userId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: (options?.enabled ?? true) && !!brandId,
+    staleTime: 5 * 60 * 1000, // 5 minutes (brand menu items don't change often)
     gcTime: 10 * 60 * 1000, // 10 minutes
   })
 }
 
-// Quick Add Library mutations
-export function useCreateSavedItem() {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: async ({ userId, itemData }: {
-      userId: string
-      itemData: Omit<SavedItem, 'id' | 'user_id' | 'times_used' | 'created_at' | 'updated_at'>
-    }) => {
-      console.log('useCreateSavedItem mutation called with:', { userId, itemData })
-      const supabase = getSupabaseClient()
-      const { data: item, error } = await supabase
-        .from('saved_items')
-        .insert({
-          user_id: userId,
-          ...itemData,
-          times_used: 0
-        })
-        .select(`
-          *,
-          brand:brands(*)
-        `)
-        .single()
-
-      if (error) {
-        console.error('Supabase error creating saved item:', error)
-        throw error
-      }
-
-      console.log('Saved item created in database:', item)
-      return item
-    },
-    onSuccess: (data, variables) => {
-      console.log('useCreateSavedItem onSuccess called, invalidating queries for userId:', variables.userId)
-      queryClient.invalidateQueries({ queryKey: queryKeys.savedItems(variables.userId) })
-    },
-    onError: (error) => {
-      console.error('useCreateSavedItem onError called:', error)
-    }
-  })
-}
-
-export function useUpdateSavedItem() {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: async ({ itemId, itemData }: {
-      itemId: string
-      itemData: Partial<Omit<SavedItem, 'id' | 'user_id' | 'times_used' | 'created_at' | 'updated_at'>>
-    }) => {
-      console.log('useUpdateSavedItem mutation called with:', { itemId, itemData })
-      const supabase = getSupabaseClient()
-      const { data: item, error } = await supabase
-        .from('saved_items')
-        .update(itemData)
-        .eq('id', itemId)
-        .select(`
-          *,
-          brand:brands(*)
-        `)
-        .single()
-
-      if (error) {
-        console.error('Supabase error updating saved item:', error)
-        throw error
-      }
-
-      console.log('Saved item updated in database:', item)
-      return item
-    },
-    onSuccess: (data) => {
-      console.log('useUpdateSavedItem onSuccess called, invalidating queries for user')
-      // Invalidate saved items for all users since we don't have userId here
-      queryClient.invalidateQueries({ queryKey: ['savedItems'] })
-    },
-    onError: (error) => {
-      console.error('useUpdateSavedItem onError called:', error)
-    }
-  })
-}
-
-export function useDeleteSavedItem() {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: async (itemId: string) => {
-      console.log('useDeleteSavedItem mutation called with itemId:', itemId)
-      const supabase = getSupabaseClient()
-      const { error } = await supabase
-        .from('saved_items')
-        .delete()
-        .eq('id', itemId)
-
-      if (error) {
-        console.error('Supabase error deleting saved item:', error)
-        throw error
-      }
-
-      console.log('Saved item deleted from database')
-      return true
-    },
-    onSuccess: () => {
-      console.log('useDeleteSavedItem onSuccess called, invalidating queries')
-      // Invalidate saved items for all users since we don't have userId here
-      queryClient.invalidateQueries({ queryKey: ['savedItems'] })
-    },
-    onError: (error) => {
-      console.error('useDeleteSavedItem onError called:', error)
-    }
-  })
-}
+// Brand mutations
 
 export function useCreateBrand() {
   const queryClient = useQueryClient()
@@ -603,7 +472,7 @@ export function useUpdateBrand() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.brands })
-      queryClient.invalidateQueries({ queryKey: ['savedItems'] })
+      queryClient.invalidateQueries({ queryKey: ['brandMenuItems'] })
     },
   })
 }
@@ -616,20 +485,20 @@ export function useDeleteBrand() {
       console.log('useDeleteBrand mutation called with brandId:', brandId)
       const supabase = getSupabaseClient()
       
-      // First check if there are any saved items using this brand
-      const { data: itemsUsingBrand, error: checkError } = await supabase
-        .from('saved_items')
+      // Check if there are any brand menu items using this brand
+      const { data: menuItemsUsingBrand, error: checkError } = await supabase
+        .from('brand_menu_items')
         .select('id')
         .eq('brand_id', brandId)
         .limit(1)
 
       if (checkError) {
-        console.error('Error checking for items using brand:', checkError)
+        console.error('Error checking for menu items using brand:', checkError)
         throw checkError
       }
 
-      if (itemsUsingBrand && itemsUsingBrand.length > 0) {
-        throw new Error('Cannot delete brand that has saved items. Please delete or reassign the items first.')
+      if (menuItemsUsingBrand && menuItemsUsingBrand.length > 0) {
+        throw new Error('Cannot delete brand that has menu items. Please delete the menu items first.')
       }
 
       const { error } = await supabase
@@ -647,10 +516,10 @@ export function useDeleteBrand() {
     },
     onSuccess: () => {
       console.log('useDeleteBrand onSuccess called, invalidating queries')
-      // Invalidate brands for all users since we don't have userId here
+      // Invalidate brands and related queries
       queryClient.invalidateQueries({ queryKey: ['brands'] })
       queryClient.invalidateQueries({ queryKey: ['brandStats'] })
-      queryClient.invalidateQueries({ queryKey: ['savedItems'] })
+      queryClient.invalidateQueries({ queryKey: ['brandMenuItems'] })
     },
     onError: (error) => {
       console.error('useDeleteBrand onError called:', error)
@@ -664,21 +533,21 @@ export function useBrandStats(userId: string, options?: { enabled?: boolean }) {
     queryFn: async (): Promise<Record<string, { itemCount: number; totalUsage: number }>> => {
       const supabase = getSupabaseClient()
       const { data: items } = await supabase
-        .from('saved_items')
-        .select('brand_id, times_used')
-        .eq('user_id', userId)
+        .from('brand_menu_items')
+        .select('brand_id')
         .not('brand_id', 'is', null)
 
       const stats: Record<string, { itemCount: number; totalUsage: number }> = {}
       
       if (items) {
-        items.forEach((item: { brand_id: string | null; times_used: number | null }) => {
+        items.forEach((item: { brand_id: string | null }) => {
           if (item.brand_id) {
             if (!stats[item.brand_id]) {
               stats[item.brand_id] = { itemCount: 0, totalUsage: 0 }
             }
             stats[item.brand_id].itemCount++
-            stats[item.brand_id].totalUsage += item.times_used || 0
+            // No usage tracking for brand menu items, just count
+            stats[item.brand_id].totalUsage = 0
           }
         })
       }
@@ -688,5 +557,59 @@ export function useBrandStats(userId: string, options?: { enabled?: boolean }) {
     enabled: (options?.enabled ?? true) && !!userId,
     staleTime: 2 * 60 * 1000, // 2 minutes
     gcTime: 5 * 60 * 1000, // 5 minutes
+  })
+}
+
+// Brand menu items mutations
+export function useCreateBrandMenuItems() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ userId, brandId, items, importSource, batchId }: {
+      userId: string
+      brandId: string
+      items: Omit<BrandMenuItem, 'id' | 'brand_id' | 'imported_by' | 'created_at' | 'updated_at'>[]
+      importSource: 'csv' | 'image' | 'manual'
+      batchId?: string
+    }) => {
+      console.log('useCreateBrandMenuItems mutation called with:', { userId, brandId, itemCount: items.length, importSource })
+      const supabase = getSupabaseClient()
+      
+      const importBatchId = batchId || crypto.randomUUID()
+      
+      const { data: menuItems, error } = await supabase
+        .from('brand_menu_items')
+        .insert(
+          items.map(item => ({
+            brand_id: brandId,
+            imported_by: userId,
+            import_source: importSource,
+            import_batch_id: importBatchId,
+            ...item
+          }))
+        )
+        .select(`
+          *,
+          brand:brands(*)
+        `)
+
+      if (error) {
+        console.error('Supabase error creating brand menu items:', error)
+        throw error
+      }
+
+      console.log('Brand menu items created in database:', menuItems?.length, 'items')
+      return menuItems || []
+    },
+    onSuccess: (data, variables) => {
+      console.log('useCreateBrandMenuItems onSuccess called, invalidating queries for brandId:', variables.brandId)
+      console.log('Query key being invalidated:', queryKeys.brandMenuItems(variables.brandId))
+      queryClient.invalidateQueries({ queryKey: queryKeys.brandMenuItems(variables.brandId) })
+      // Also invalidate the general brands query to update counts
+      queryClient.invalidateQueries({ queryKey: queryKeys.brands })
+    },
+    onError: (error) => {
+      console.error('useCreateBrandMenuItems onError called:', error)
+    }
   })
 } 

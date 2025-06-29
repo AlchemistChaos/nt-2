@@ -20,10 +20,18 @@ DROP POLICY IF EXISTS "Users can view their own chat messages" ON chat_messages;
 DROP POLICY IF EXISTS "Users can insert their own chat messages" ON chat_messages;
 
 CREATE POLICY "Users can view their own chat messages" ON chat_messages
-    FOR SELECT USING (auth.uid()::text = user_id);
+    FOR SELECT USING (
+        user_id IN (
+            SELECT id FROM users WHERE auth_user_id = auth.uid()
+        )
+    );
 
 CREATE POLICY "Users can insert their own chat messages" ON chat_messages
-    FOR INSERT WITH CHECK (auth.uid()::text = user_id);
+    FOR INSERT WITH CHECK (
+        user_id IN (
+            SELECT id FROM users WHERE auth_user_id = auth.uid()
+        )
+    );
 
 -- Add comment for documentation
 COMMENT ON COLUMN chat_messages.date IS 'Date of the chat session (YYYY-MM-DD format). Each day gets its own chat thread.'; 

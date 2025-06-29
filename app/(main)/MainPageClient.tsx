@@ -66,13 +66,21 @@ export function MainPageClient({ user }: MainPageClientProps) {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  // Track if we should auto-scroll (only for new messages, not when loading)
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(false)
+
   // Sync local state with cached messages when date changes
   // Only sync when date actually changes to prevent infinite loops
   const prevSelectedDate = useRef<string>(selectedDate)
   useEffect(() => {
     if (selectedDate !== prevSelectedDate.current) {
+      // Clear messages immediately when date changes to avoid showing old messages
+      setMessages([])
+      // Then set the new messages for the selected date
       setMessages(cachedMessages)
       prevSelectedDate.current = selectedDate
+      // Don't auto-scroll when switching dates
+      setShouldAutoScroll(false)
     }
   }, [selectedDate, cachedMessages])
 
@@ -80,6 +88,8 @@ export function MainPageClient({ user }: MainPageClientProps) {
   useEffect(() => {
     if (messages.length === 0 && cachedMessages.length > 0) {
       setMessages(cachedMessages)
+      // Don't auto-scroll when loading cached messages
+      setShouldAutoScroll(false)
     }
   }, [cachedMessages, messages.length])
 
@@ -87,9 +97,13 @@ export function MainPageClient({ user }: MainPageClientProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  // Only auto-scroll when we explicitly want to (for new messages during active chat)
   useEffect(() => {
-    scrollToBottom()
-  }, [messages])
+    if (shouldAutoScroll) {
+      scrollToBottom()
+      setShouldAutoScroll(false)
+    }
+  }, [messages, shouldAutoScroll])
 
   const refreshMeals = async () => {
     // Use React Query to invalidate and refetch meals data for selected date
@@ -107,20 +121,16 @@ export function MainPageClient({ user }: MainPageClientProps) {
   }
 
   const handlePrefetchLibrary = () => {
-    // Prefetch saved items data when user hovers over library button
+    // Prefetch brands data when user hovers over library button
     queryClient.prefetchQuery({
-      queryKey: queryKeys.savedItems(user.id),
+      queryKey: queryKeys.brands,
       queryFn: async () => {
         const supabase = createClient()
-        const { data: items } = await supabase
-          .from('saved_items')
-          .select(`
-            *,
-            brand:brands(*)
-          `)
-          .eq('user_id', user.id)
-          .order('times_used', { ascending: false })
-        return items || []
+        const { data: brands } = await supabase
+          .from('brands')
+          .select('*')
+          .order('name')
+        return brands || []
       },
       staleTime: 2 * 60 * 1000, // 2 minutes
     })
@@ -183,6 +193,8 @@ export function MainPageClient({ user }: MainPageClientProps) {
       created_at: new Date().toISOString()
     }
     setMessages(prev => [...prev, userMessage])
+    // Auto-scroll for new user messages
+    setShouldAutoScroll(true)
 
     try {
       const response = await fetch('/api/chat', {
@@ -215,6 +227,8 @@ export function MainPageClient({ user }: MainPageClientProps) {
         date: selectedDate,
         created_at: new Date().toISOString()
       }])
+      // Auto-scroll for new assistant messages
+      setShouldAutoScroll(true)
 
       if (reader) {
         while (true) {
@@ -243,6 +257,8 @@ export function MainPageClient({ user }: MainPageClientProps) {
                       ? { ...msg, content: assistantMessage }
                       : msg
                   ))
+                  // Auto-scroll as assistant message is being streamed
+                  setShouldAutoScroll(true)
                 }
 
                 if (parsed.action) {
@@ -272,6 +288,8 @@ export function MainPageClient({ user }: MainPageClientProps) {
         date: selectedDate,
         created_at: new Date().toISOString()
       }])
+      // Auto-scroll for error messages
+      setShouldAutoScroll(true)
     } finally {
       setIsLoading(false)
     }
@@ -354,8 +372,8 @@ export function MainPageClient({ user }: MainPageClientProps) {
                 className="h-8 w-8 sm:h-10 sm:w-10"
               >
                 <Settings className="h-4 w-4 sm:h-5 sm:w-5" />
-              </Button>
-              <Button
+                              </Button>
+                <Button
                 variant="ghost"
                 size="icon"
                 onClick={handleSignOut}

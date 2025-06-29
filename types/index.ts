@@ -144,46 +144,56 @@ export interface Brand {
   updated_at: string;
 }
 
-export interface SavedItem {
+
+
+export interface BrandMenuItem {
   id: string;
-  user_id: string;
-  brand_id?: string;
+  brand_id: string;
   brand?: Brand;
   name: string;
-  category: 'meal' | 'snack' | 'supplement' | 'drink' | 'ingredient';
+  description?: string;
+  category?: string;
+  price_cents?: number;
+  currency?: string;
   serving_size?: string;
   kcal_per_serving?: number;
   g_protein_per_serving?: number;
   g_carb_per_serving?: number;
   g_fat_per_serving?: number;
+  g_fiber_per_serving?: number;
+  g_sugar_per_serving?: number;
+  mg_sodium_per_serving?: number;
   ingredients?: string[];
   allergens?: string[];
-  notes?: string;
-  image_url?: string;
-  times_used: number;
-  last_used_at?: string;
+  dietary_tags?: string[];
+  imported_by?: string;
+  import_source?: 'csv' | 'image' | 'manual';
+  import_batch_id?: string;
+  is_available: boolean;
+  is_seasonal: boolean;
   created_at: string;
   updated_at: string;
 }
 
-export interface QuickAddPattern {
-  id: string;
-  saved_item_id: string;
-  saved_item?: SavedItem;
-  pattern: string;
-  confidence_score: number;
-  created_at: string;
+export interface ImportMenuRequest {
+  brandId?: string;
+  brandName?: string;
+  brandType?: string;
+  file?: string; // base64 encoded file
+  fileType: 'image' | 'csv';
+  instructions?: string;
 }
 
-export interface SupplementSchedule {
-  id: string;
-  user_id: string;
-  saved_item_id: string;
-  saved_item?: SavedItem;
-  frequency: 'daily' | 'weekly' | 'as_needed';
-  times_per_day: number;
-  preferred_times?: string[];
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
+export interface ImportMenuResponse {
+  items: Partial<BrandMenuItem>[];
+  detectedBrand?: {
+    id?: string;
+    name: string;
+    type: string;
+  };
+}
+
+export interface ImportReviewItem extends Partial<BrandMenuItem> {
+  isApproved: boolean;
+  isEdited: boolean;
 } 

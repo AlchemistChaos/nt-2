@@ -1,36 +1,47 @@
 'use client'
-
 import { useState } from 'react'
-import { Brand, SavedItem } from '@/types'
-import { Button } from '@/components/ui/button'
+import { Brand, BrandMenuItem } from '@/types'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Utensils, Pill, Package, Edit, Clock, X } from 'lucide-react'
-import { EditSavedItemModal } from './EditSavedItemModal'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Utensils, Pill, Package, X, DollarSign, Plus } from 'lucide-react'
+import { useBrandMenuItems } from '@/lib/supabase/client-cache'
+import { CreateBrandMenuItemModal } from './CreateBrandMenuItemModal'
 
 interface BrandDetailModalProps {
   isOpen: boolean
   onClose: () => void
   brand: Brand | null
-  savedItems: SavedItem[]
-  brands: Brand[]
-  brandStats: { itemCount: number; totalUsage: number } | undefined
 }
 
 export function BrandDetailModal({ 
   isOpen, 
   onClose, 
-  brand, 
-  savedItems, 
-  brands,
-  brandStats 
+  brand
 }: BrandDetailModalProps) {
-  const [editingItem, setEditingItem] = useState<SavedItem | null>(null)
-  const [showEditItemModal, setShowEditItemModal] = useState(false)
+  const [showCreateItemModal, setShowCreateItemModal] = useState(false)
+
+  // Fetch brand menu items
+  const { data: brandMenuItems = [], isLoading: menuItemsLoading, error: menuItemsError } = useBrandMenuItems(
+    brand?.id || '', 
+    { enabled: isOpen && !!brand?.id }
+  )
+
+  // Basic debug logging
+  console.log('BrandDetailModal Debug:', {
+    isOpen,
+    brandId: brand?.id,
+    brandName: brand?.name,
+    menuItemsCount: brandMenuItems.length,
+    menuItemsLoading,
+    menuItemsError,
+    timestamp: new Date().toISOString()
+  })
 
   if (!isOpen || !brand) return null
 
-  const brandItems = savedItems.filter(item => item.brand_id === brand.id)
+  // Only show imported brand menu items
+  const allItems = brandMenuItems
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
@@ -61,16 +72,6 @@ export function BrandDetailModal({
     }
   }
 
-  const handleEditItem = (item: SavedItem) => {
-    setEditingItem(item)
-    setShowEditItemModal(true)
-  }
-
-  const handleCloseEditModal = () => {
-    setShowEditItemModal(false)
-    setEditingItem(null)
-  }
-
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -87,62 +88,85 @@ export function BrandDetailModal({
                   <Badge className="capitalize">
                     {brand.type.replace('_', ' ')}
                   </Badge>
-                  {brandStats && (
-                    <>
-                      <span className="text-sm text-gray-600">
-                        {brandStats.itemCount} {brandStats.itemCount === 1 ? 'item' : 'items'}
-                      </span>
-                      <span className="text-sm text-gray-600">
-                        Used {brandStats.totalUsage} {brandStats.totalUsage === 1 ? 'time' : 'times'}
-                      </span>
-                    </>
-                  )}
                 </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={onClose}>
-                <X className="h-5 w-5" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => setShowCreateItemModal(true)}
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Item
+                </Button>
+                <button 
+                  className="text-gray-400 hover:text-gray-600 p-1"
+                  onClick={onClose}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-6">
-            {brandItems.length === 0 ? (
+            <div className="mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Brand Menu Items</h3>
+                <p className="text-sm text-gray-600">
+                  {allItems.length} imported menu items
+                </p>
+              </div>
+            </div>
+
+            {menuItemsLoading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="text-gray-500 mt-2">Loading items...</p>
+              </div>
+            ) : allItems.length === 0 ? (
               <div className="text-center py-8">
                 <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No items yet</h3>
                 <p className="text-gray-500">
-                  No saved items have been added to this brand yet.
+                  No saved items or imported menu items found for this brand.
                 </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {brandItems.map((item) => (
+                {allItems.map((item) => (
                   <Card key={item.id} className="hover:shadow-md transition-shadow">
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-2">
-                          {getCategoryIcon(item.category)}
+                          {getCategoryIcon(item.category || 'meal')}
                           <CardTitle className="text-lg">{item.name}</CardTitle>
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-8 w-8 p-0"
-                          onClick={() => handleEditItem(item)}
-                          title="Edit item"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        {item.price_cents && (
+                          <div className="flex items-center gap-1 text-green-600">
+                            <DollarSign className="h-4 w-4" />
+                            <span className="font-semibold">
+                              {item.currency || '$'}{(item.price_cents / 100).toFixed(2)}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       
-                      <Badge className={getCategoryColor(item.category)}>
-                        {item.category}
+                      <Badge className={getCategoryColor(item.category || 'meal')}>
+                        {item.category || 'meal'}
                       </Badge>
                     </CardHeader>
 
                     <CardContent className="pt-0">
                       <div className="space-y-3">
+                        {/* Description */}
+                        {item.description && (
+                          <div className="text-sm text-gray-600">
+                            {item.description}
+                          </div>
+                        )}
+
                         {/* Serving Size */}
                         {item.serving_size && (
                           <div className="text-sm text-gray-600">
@@ -163,25 +187,17 @@ export function BrandDetailModal({
                           </div>
                         )}
 
-                        {/* Usage Stats */}
+                        {/* Import Info */}
                         <div className="flex items-center justify-between text-xs text-gray-500">
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            <span>Used {item.times_used} times</span>
-                          </div>
-                          {item.last_used_at && (
+                          <Badge variant="outline" className="text-xs">
+                            {item.import_source}
+                          </Badge>
+                          {item.created_at && (
                             <span>
-                              Last: {new Date(item.last_used_at).toLocaleDateString()}
+                              Added: {new Date(item.created_at).toLocaleDateString()}
                             </span>
                           )}
                         </div>
-
-                        {/* Notes */}
-                        {item.notes && (
-                          <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
-                            {item.notes}
-                          </div>
-                        )}
 
                         {/* Ingredients */}
                         {item.ingredients && item.ingredients.length > 0 && (
@@ -189,7 +205,7 @@ export function BrandDetailModal({
                             <span className="font-medium text-gray-700">Ingredients:</span>
                             <div className="flex flex-wrap gap-1 mt-1">
                               {item.ingredients.slice(0, 3).map((ingredient, index) => (
-                                <Badge key={index} variant="outline" className="text-xs">
+                                <Badge key={`ingredient-${index}`} variant="outline" className="text-xs">
                                   {ingredient}
                                 </Badge>
                               ))}
@@ -208,7 +224,7 @@ export function BrandDetailModal({
                             <span className="font-medium text-red-700">Allergens:</span>
                             <div className="flex flex-wrap gap-1 mt-1">
                               {item.allergens.slice(0, 3).map((allergen, index) => (
-                                <Badge key={index} variant="destructive" className="text-xs">
+                                <Badge key={`allergen-${index}`} variant="destructive" className="text-xs">
                                   {allergen}
                                 </Badge>
                               ))}
@@ -227,16 +243,18 @@ export function BrandDetailModal({
               </div>
             )}
           </div>
+
         </div>
       </div>
 
-      {/* Edit Item Modal */}
-      <EditSavedItemModal
-        isOpen={showEditItemModal}
-        onClose={handleCloseEditModal}
-        item={editingItem}
-        brands={brands}
-      />
+      {/* Create Menu Item Modal */}
+      {brand && (
+        <CreateBrandMenuItemModal
+          isOpen={showCreateItemModal}
+          onClose={() => setShowCreateItemModal(false)}
+          brand={brand}
+        />
+      )}
     </>
   )
 } 

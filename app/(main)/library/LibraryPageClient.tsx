@@ -1,22 +1,19 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { User, SavedItem, Brand } from '@/types'
+import { useState } from 'react'
+import { User, Brand, ImportMenuResponse } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Plus, Search, Clock, Star, Package, Utensils, Pill } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { ArrowLeft, Plus, Search, Star, Upload } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useSavedItems, useBrands, useSupplementSchedules, useBrandStats } from '@/lib/supabase/client-cache'
-import { SavedItemCard } from '@/components/custom/SavedItemCard'
-import { CreateSavedItemModal } from '@/components/custom/CreateSavedItemModal'
-import { EditSavedItemModal } from '@/components/custom/EditSavedItemModal'
+import { useBrands, useBrandStats } from '@/lib/supabase/client-cache'
 import { CreateBrandModal } from '@/components/custom/CreateBrandModal'
 import { EditBrandModal } from '@/components/custom/EditBrandModal'
 import { BrandDetailModal } from '@/components/custom/BrandDetailModal'
 import { BrandCard } from '@/components/custom/BrandCard'
+import { ImportBrandMenuModal } from '@/components/custom/ImportBrandMenuModal'
+import { ImportReviewTable } from '@/components/custom/ImportReviewTable'
 
 interface LibraryPageClientProps {
   user: User
@@ -25,91 +22,32 @@ interface LibraryPageClientProps {
 export function LibraryPageClient({ user }: LibraryPageClientProps) {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
-  const [showCreateItemModal, setShowCreateItemModal] = useState(false)
   const [showCreateBrandModal, setShowCreateBrandModal] = useState(false)
-  const [showEditItemModal, setShowEditItemModal] = useState(false)
   const [showEditBrandModal, setShowEditBrandModal] = useState(false)
   const [showBrandDetailModal, setShowBrandDetailModal] = useState(false)
-  const [editingItem, setEditingItem] = useState<SavedItem | null>(null)
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null)
   const [viewingBrand, setViewingBrand] = useState<Brand | null>(null)
-  const [activeTab, setActiveTab] = useState('items')
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [showImportReview, setShowImportReview] = useState(false)
+  const [importAnalysisResult, setImportAnalysisResult] = useState<ImportMenuResponse | null>(null)
+  const [importSource, setImportSource] = useState<'csv' | 'image' | null>(null)
 
-  // Lazy load data based on active tab - only fetch what's needed
-  const shouldLoadItems = activeTab === 'items'
-  const shouldLoadBrands = activeTab === 'brands'
-  const shouldLoadSupplements = activeTab === 'supplements'
+  // Fetch brands data
+  const { data: brands = [], isLoading: brandsLoading, isError: brandsError, error: brandsFetchError } = useBrands()
+  const { data: brandStats = {} } = useBrandStats(user.id, { enabled: brands.length > 0 })
 
-  // Fetch data using React Query with conditional loading
-  const { data: savedItems = [], isLoading: itemsLoading } = useSavedItems(user.id, { enabled: shouldLoadItems })
-  const { data: brands = [], isLoading: brandsLoading, isError: brandsError, error: brandsFetchError } = useBrands({ enabled: shouldLoadBrands })
-  const { data: supplementSchedules = [], isLoading: schedulesLoading } = useSupplementSchedules(user.id, { enabled: shouldLoadSupplements })
-  
-  // Only load brand stats when viewing brands tab and we have brands data
-  const { data: brandStats = {} } = useBrandStats(user.id, { enabled: shouldLoadBrands && brands.length > 0 })
+  // Debug brands data
+  console.log('LibraryPageClient brands debug:', {
+    brandsLoading,
+    brandsCount: brands.length,
+    brands: brands.map(b => ({ id: b.id, name: b.name, type: b.type }))
+  })
 
-  // Extract unique brands from saved items to avoid redundant API call
-  const brandsFromItems = savedItems
-    .map(item => item.brand)
-    .filter((brand): brand is Brand => brand !== null && brand !== undefined)
-    .reduce((acc, brand) => {
-      if (!acc.find(b => b.id === brand.id)) {
-        acc.push(brand)
-      }
-      return acc
-    }, [] as Brand[])
-
-  // Use brands from saved items when on items tab, separate brands query when on brands tab
-  const allBrands = shouldLoadBrands ? brands : brandsFromItems
-
-  // Filter items based on search query
-  const filteredItems = savedItems.filter(item =>
-    item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.brand?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.category.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  const filteredBrands = allBrands.filter(brand =>
+  // Filter brands based on search query
+  const filteredBrands = brands.filter(brand =>
     brand.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     brand.type.toLowerCase().includes(searchQuery.toLowerCase())
   )
-
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'meal':
-      case 'snack':
-        return <Utensils className="h-4 w-4" />
-      case 'supplement':
-        return <Pill className="h-4 w-4" />
-      case 'drink':
-        return <Package className="h-4 w-4" />
-      default:
-        return <Package className="h-4 w-4" />
-    }
-  }
-
-  const getBrandTypeColor = (type: string) => {
-    switch (type) {
-      case 'restaurant':
-        return 'bg-orange-100 text-orange-800'
-      case 'supplement_brand':
-        return 'bg-green-100 text-green-800'
-      case 'food_brand':
-        return 'bg-blue-100 text-blue-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const handleEditItem = (item: SavedItem) => {
-    setEditingItem(item)
-    setShowEditItemModal(true)
-  }
-
-  const handleCloseEditModal = () => {
-    setShowEditItemModal(false)
-    setEditingItem(null)
-  }
 
   const handleEditBrand = (brand: Brand) => {
     setEditingBrand(brand)
@@ -122,6 +60,12 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
   }
 
   const handleViewBrandDetails = (brand: Brand) => {
+    console.log('Clicking on brand for details:', {
+      brand,
+      brandId: brand.id,
+      brandName: brand.name,
+      brandType: brand.type
+    })
     setViewingBrand(brand)
     setShowBrandDetailModal(true)
   }
@@ -129,6 +73,26 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
   const handleCloseBrandDetailModal = () => {
     setShowBrandDetailModal(false)
     setViewingBrand(null)
+  }
+
+  const handleImportAnalysisComplete = (result: ImportMenuResponse, source: 'csv' | 'image') => {
+    setImportAnalysisResult(result)
+    setImportSource(source)
+    setShowImportModal(false)
+    setShowImportReview(true)
+  }
+
+  const handleImportComplete = () => {
+    setShowImportReview(false)
+    setImportAnalysisResult(null)
+    setImportSource(null)
+    // React Query will automatically refetch data
+  }
+
+  const handleImportCancel = () => {
+    setShowImportReview(false)
+    setImportAnalysisResult(null)
+    setImportSource(null)
   }
 
   return (
@@ -151,19 +115,19 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
           </div>
           <div className="flex items-center gap-2">
             <Button
-              onClick={() => setShowCreateBrandModal(true)}
+              onClick={() => setShowImportModal(true)}
               variant="outline"
+              size="sm"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Import Menu
+            </Button>
+            <Button
+              onClick={() => setShowCreateBrandModal(true)}
               size="sm"
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Brand
-            </Button>
-            <Button
-              onClick={() => setShowCreateItemModal(true)}
-              size="sm"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Item
             </Button>
           </div>
         </div>
@@ -176,7 +140,7 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
-              placeholder="Search items, brands, or categories..."
+              placeholder="Search brands..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -184,192 +148,68 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
           </div>
         </div>
 
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="items" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Saved Items ({savedItems.length})
-            </TabsTrigger>
-            <TabsTrigger value="brands" className="flex items-center gap-2">
-              <Star className="h-4 w-4" />
-              Brands ({allBrands.length})
-            </TabsTrigger>
-            <TabsTrigger value="supplements" className="flex items-center gap-2">
-              <Pill className="h-4 w-4" />
-              Supplements ({supplementSchedules.length})
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Saved Items Tab */}
-          <TabsContent value="items" className="mt-6">
-            {itemsLoading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="text-gray-500 mt-2">Loading saved items...</p>
-              </div>
-            ) : filteredItems.length === 0 ? (
-              <Card>
-                <CardContent className="text-center py-8">
-                  <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No saved items yet</h3>
-                  <p className="text-gray-500 mb-4">
-                    {searchQuery ? 'No items match your search.' : 'Start building your quick add library by saving frequently used meals and supplements.'}
-                  </p>
-                  {!searchQuery && (
-                    <Button onClick={() => setShowCreateItemModal(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Your First Item
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredItems.map((item) => (
-                  <SavedItemCard
-                    key={item.id}
-                    item={item}
-                    brands={allBrands}
-                    onEdit={handleEditItem}
-                    onItemUpdated={() => {
-                      // React Query will automatically refetch
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Brands Tab */}
-          <TabsContent value="brands" className="mt-6">
-            {brandsLoading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="text-gray-500 mt-2">Loading brands...</p>
-              </div>
-            ) : brandsError ? (
-              <Card>
-                <CardContent className="text-center py-8">
-                  <Star className="h-12 w-12 text-red-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-red-700 mb-2">Error Loading Brands</h3>
-                  <p className="text-gray-500 mb-4">
-                    There was an issue fetching the brands. Please try again later.
-                  </p>
-                  <pre className="text-xs text-left bg-red-50 p-2 rounded">{brandsFetchError?.message}</pre>
-                </CardContent>
-              </Card>
-            ) : filteredBrands.length === 0 ? (
-              <Card>
-                <CardContent className="text-center py-8">
-                  <Star className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No brands found</h3>
-                  <p className="text-gray-500 mb-4">
-                    {searchQuery ? 'No brands match your search.' : 'Add brands to organize your saved items.'}
-                  </p>
-                  {!searchQuery && (
-                    <Button onClick={() => setShowCreateBrandModal(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Brand
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredBrands.map((brand) => (
-                  <BrandCard
-                    key={brand.id}
-                    brand={brand}
-                    brandStats={brandStats[brand.id]}
-                    onEdit={handleEditBrand}
-                    onViewDetails={handleViewBrandDetails}
-                    onBrandUpdated={() => {
-                      // React Query will automatically refetch
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Supplements Tab */}
-          <TabsContent value="supplements" className="mt-6">
-            {schedulesLoading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="text-gray-500 mt-2">Loading supplement schedules...</p>
-              </div>
-            ) : supplementSchedules.length === 0 ? (
-              <Card>
-                <CardContent className="text-center py-8">
-                  <Pill className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No supplement schedules</h3>
-                  <p className="text-gray-500 mb-4">
-                    Set up recurring supplement schedules to track your daily supplements automatically.
-                  </p>
-                  <Button onClick={() => setShowCreateItemModal(true)}>
+        {/* Brands Section */}
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Star className="h-5 w-5" />
+            Brands ({brands.length})
+          </h2>
+          
+          {brandsLoading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="text-gray-500 mt-2">Loading brands...</p>
+            </div>
+          ) : brandsError ? (
+            <Card>
+              <CardContent className="text-center py-8">
+                <Star className="h-12 w-12 text-red-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-red-700 mb-2">Error Loading Brands</h3>
+                <p className="text-gray-500 mb-4">
+                  There was an issue fetching the brands. Please try again later.
+                </p>
+                <pre className="text-xs text-left bg-red-50 p-2 rounded">{brandsFetchError?.message}</pre>
+              </CardContent>
+            </Card>
+          ) : filteredBrands.length === 0 ? (
+            <Card>
+              <CardContent className="text-center py-8">
+                <Star className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No brands found</h3>
+                <p className="text-gray-500 mb-4">
+                  {searchQuery ? 'No brands match your search.' : 'Add brands to organize your menu items.'}
+                </p>
+                {!searchQuery && (
+                  <Button onClick={() => setShowCreateBrandModal(true)}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Add Supplement Schedule
+                    Add Brand
                   </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {supplementSchedules.map((schedule) => (
-                  <Card key={schedule.id}>
-                    <CardHeader>
-                      <div className="flex items-center gap-2">
-                        <Pill className="h-5 w-5 text-green-600" />
-                        <CardTitle className="text-lg">{schedule.saved_item?.name}</CardTitle>
-                      </div>
-                      {schedule.saved_item?.brand && (
-                        <CardDescription>{schedule.saved_item.brand.name}</CardDescription>
-                      )}
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Clock className="h-4 w-4 text-gray-400" />
-                          <span>{schedule.frequency} - {schedule.times_per_day}x per day</span>
-                        </div>
-                        {schedule.preferred_times && schedule.preferred_times.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {schedule.preferred_times.map((time, index) => (
-                              <Badge key={index} variant="outline" className="text-xs">
-                                {time}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredBrands.map((brand) => (
+                <BrandCard
+                  key={brand.id}
+                  brand={brand}
+                  brandStats={brandStats[brand.id]}
+                  onEdit={handleEditBrand}
+                  onViewDetails={handleViewBrandDetails}
+                  onBrandUpdated={() => {
+                    // React Query will automatically refetch
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Modals */}
-      <CreateSavedItemModal
-        isOpen={showCreateItemModal}
-        onClose={() => setShowCreateItemModal(false)}
-        userId={user.id}
-        brands={allBrands}
-      />
-
       <CreateBrandModal
         isOpen={showCreateBrandModal}
         onClose={() => setShowCreateBrandModal(false)}
-      />
-
-      <EditSavedItemModal
-        isOpen={showEditItemModal}
-        onClose={handleCloseEditModal}
-        item={editingItem}
-        brands={allBrands}
       />
 
       <EditBrandModal
@@ -382,10 +222,22 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
         isOpen={showBrandDetailModal}
         onClose={handleCloseBrandDetailModal}
         brand={viewingBrand}
-        savedItems={savedItems}
-        brands={allBrands}
-        brandStats={viewingBrand ? brandStats[viewingBrand.id] : undefined}
       />
+
+      <ImportBrandMenuModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onAnalysisComplete={handleImportAnalysisComplete}
+      />
+
+      {showImportReview && importAnalysisResult && importSource && (
+        <ImportReviewTable
+          analysisResult={importAnalysisResult}
+          importSource={importSource}
+          onComplete={handleImportComplete}
+          onCancel={handleImportCancel}
+        />
+      )}
     </div>
   )
 } 
