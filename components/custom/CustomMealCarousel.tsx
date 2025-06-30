@@ -95,7 +95,7 @@ export function CustomMealCarousel({ meals, dailyTarget, user, selectedDate, onM
     try {
       const result = await convertToYesterday.mutateAsync(user.id)
       
-      if (result.movedCount > 0) {
+      if (result.success && result.movedCount > 0) {
         alert(`Successfully moved ${result.movedCount} meals to yesterday!`)
         onMealUpdated?.() // Refresh the meals data
       } else {

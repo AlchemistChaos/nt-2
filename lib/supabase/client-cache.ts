@@ -391,8 +391,19 @@ export function useConvertMealsToYesterday() {
   
   return useMutation({
     mutationFn: async (userId: string) => {
-      const { convertTodaysToYesterday } = await import('@/lib/supabase/database')
-      return await convertTodaysToYesterday(userId)
+      const response = await fetch('/api/convert-to-yesterday', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to convert meals')
+      }
+
+      return await response.json()
     },
     onSuccess: (_data, userId) => {
       // Invalidate queries for both today and yesterday to refresh the UI
