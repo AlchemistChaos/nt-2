@@ -386,6 +386,29 @@ export function useAddChatMessage() {
   })
 }
 
+export function useConvertMealsToYesterday() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const { convertTodaysToYesterday } = await import('@/lib/supabase/database')
+      return await convertTodaysToYesterday(userId)
+    },
+    onSuccess: (_data, userId) => {
+      // Invalidate queries for both today and yesterday to refresh the UI
+      const today = new Date().toISOString().split('T')[0]
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      
+      // Invalidate meals for both dates
+      queryClient.invalidateQueries({ queryKey: queryKeys.mealsForDate(userId, today) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.mealsForDate(userId, yesterday) })
+      
+      // Also invalidate user days to update the sidebar
+      queryClient.invalidateQueries({ queryKey: queryKeys.userDays(userId) })
+    },
+  })
+}
+
 // Quick Add Library hooks
 export function useBrands(options?: { enabled?: boolean }) {
   const supabase = getSupabaseClient()

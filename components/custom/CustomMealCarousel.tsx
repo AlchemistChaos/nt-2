@@ -1,21 +1,30 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { CarouselCard } from './CarouselCard'
-import { MealWithItems, DailyTarget } from '@/types'
-import { ChevronLeft, ChevronRight, Zap, Beef, Wheat, Droplets } from 'lucide-react'
+import { MealWithItems, DailyTarget, User } from '@/types'
+import { ChevronLeft, ChevronRight, Zap, Beef, Wheat, Droplets, Calendar, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useConvertMealsToYesterday } from '@/lib/supabase/client-cache'
+import { getTodayDateString } from '@/lib/utils/date'
 
 interface CustomMealCarouselProps {
   meals: MealWithItems[]
   dailyTarget: DailyTarget | null
+  user: User
+  selectedDate: string
   onMealUpdated?: () => void
   onMealDeleted?: () => void
 }
 
-export function CustomMealCarousel({ meals, dailyTarget, onMealUpdated, onMealDeleted }: CustomMealCarouselProps) {
+export function CustomMealCarousel({ meals, dailyTarget, user, selectedDate, onMealUpdated, onMealDeleted }: CustomMealCarouselProps) {
   const mainMealScrollRef = useRef<HTMLDivElement>(null)
   const snackScrollRef = useRef<HTMLDivElement>(null)
+  const [isConverting, setIsConverting] = useState(false)
+  
+  const convertToYesterday = useConvertMealsToYesterday()
+  const isToday = selectedDate === getTodayDateString()
+  const hasMealsToday = meals.length > 0
 
   const scroll = (direction: 'left' | 'right', containerRef: React.RefObject<HTMLDivElement | null>) => {
     if (!containerRef.current) return
@@ -73,6 +82,33 @@ export function CustomMealCarousel({ meals, dailyTarget, onMealUpdated, onMealDe
 
   const { mainMealCards, snackCards } = groupMealsByType()
 
+  const handleConvertToYesterday = async () => {
+    if (!hasMealsToday) return
+    
+    const confirmed = confirm(
+      `Move all ${meals.length} meals from today to yesterday?\n\nThis will:\n• Move all today's meals to yesterday\n• Clear today for a fresh start\n• This action cannot be undone`
+    )
+    
+    if (!confirmed) return
+    
+    setIsConverting(true)
+    try {
+      const result = await convertToYesterday.mutateAsync(user.id)
+      
+      if (result.movedCount > 0) {
+        alert(`Successfully moved ${result.movedCount} meals to yesterday!`)
+        onMealUpdated?.() // Refresh the meals data
+      } else {
+        alert('No meals found to move.')
+      }
+    } catch (error) {
+      console.error('Error converting meals to yesterday:', error)
+      alert('Failed to move meals. Please try again.')
+    } finally {
+      setIsConverting(false)
+    }
+  }
+
   return (
     <div className="relative w-full">
       {/* Header */}
@@ -94,6 +130,21 @@ export function CustomMealCarousel({ meals, dailyTarget, onMealUpdated, onMealDe
             </div>
           </div>
         </div>
+        
+        {/* Convert to Yesterday Button - only show for today with meals */}
+        {isToday && hasMealsToday && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleConvertToYesterday}
+            disabled={isConverting}
+            className="h-8 text-xs px-3 gap-1.5 border-orange-200 text-orange-700 hover:bg-orange-50 hover:border-orange-300"
+            title="Move all today's meals to yesterday and start fresh"
+          >
+            <RotateCcw className="h-3 w-3" />
+            {isConverting ? 'Moving...' : 'Convert to Yesterday'}
+          </Button>
+        )}
       </div>
 
       {/* Main Meals Row (Breakfast, Lunch, Dinner) */}

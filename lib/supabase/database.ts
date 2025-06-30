@@ -484,4 +484,53 @@ export async function searchBrandMenuItems(query: string): Promise<BrandMenuItem
     .limit(20)
 
   return items || []
+}
+
+export async function convertMealsToDate(
+  userId: string, 
+  fromDate: string, 
+  toDate: string
+): Promise<{ movedCount: number; meals: Meal[] }> {
+  const supabase = await createClient()
+  
+  // First, get all meals for the source date
+  const { data: mealsToMove, error: fetchError } = await supabase
+    .from('meals')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('date', fromDate)
+
+  if (fetchError) {
+    console.error('Error fetching meals to move:', fetchError)
+    throw new Error('Failed to fetch meals')
+  }
+
+  if (!mealsToMove || mealsToMove.length === 0) {
+    return { movedCount: 0, meals: [] }
+  }
+
+  // Update all meals to the new date
+  const { data: updatedMeals, error: updateError } = await supabase
+    .from('meals')
+    .update({ date: toDate })
+    .eq('user_id', userId)
+    .eq('date', fromDate)
+    .select()
+
+  if (updateError) {
+    console.error('Error updating meal dates:', updateError)
+    throw new Error('Failed to move meals to new date')
+  }
+
+  return { 
+    movedCount: updatedMeals?.length || 0, 
+    meals: updatedMeals || [] 
+  }
+}
+
+export async function convertTodaysToYesterday(userId: string): Promise<{ movedCount: number; meals: Meal[] }> {
+  const today = new Date().toISOString().split('T')[0]
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  
+  return convertMealsToDate(userId, today, yesterday)
 } 

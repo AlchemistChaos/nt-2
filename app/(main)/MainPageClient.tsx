@@ -427,6 +427,8 @@ useEffect(() => {
             <CustomMealCarousel 
               meals={meals} 
               dailyTarget={dailyTarget || null}
+              user={user}
+              selectedDate={selectedDate}
               onMealUpdated={refreshMeals}
               onMealDeleted={refreshMeals}
             />
