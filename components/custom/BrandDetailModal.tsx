@@ -4,9 +4,10 @@ import { Brand, BrandMenuItem } from '@/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Utensils, Pill, Package, X, DollarSign, Plus } from 'lucide-react'
+import { Utensils, Pill, Package, X, DollarSign, Plus, Edit2 } from 'lucide-react'
 import { useBrandMenuItems } from '@/lib/supabase/client-cache'
 import { CreateBrandMenuItemModal } from './CreateBrandMenuItemModal'
+import { EditBrandMenuItemModal } from './EditBrandMenuItemModal'
 
 interface BrandDetailModalProps {
   isOpen: boolean
@@ -20,6 +21,8 @@ export function BrandDetailModal({
   brand
 }: BrandDetailModalProps) {
   const [showCreateItemModal, setShowCreateItemModal] = useState(false)
+  const [showEditItemModal, setShowEditItemModal] = useState(false)
+  const [editingItem, setEditingItem] = useState<BrandMenuItem | null>(null)
 
   // Fetch brand menu items
   const { data: brandMenuItems = [], isLoading: menuItemsLoading, error: menuItemsError } = useBrandMenuItems(
@@ -72,6 +75,16 @@ export function BrandDetailModal({
     }
   }
 
+  const handleEditItem = (item: BrandMenuItem) => {
+    setEditingItem(item)
+    setShowEditItemModal(true)
+  }
+
+  const handleCloseEditModal = () => {
+    setShowEditItemModal(false)
+    setEditingItem(null)
+  }
+
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -103,7 +116,7 @@ export function BrandDetailModal({
                   className="text-gray-400 hover:text-gray-600 p-1"
                   onClick={onClose}
                 >
-                  <X className="h-5 w-5" />
+                <X className="h-5 w-5" />
                 </button>
               </div>
             </div>
@@ -143,14 +156,25 @@ export function BrandDetailModal({
                           {getCategoryIcon(item.category || 'meal')}
                           <CardTitle className="text-lg">{item.name}</CardTitle>
                         </div>
-                        {item.price_cents && (
-                          <div className="flex items-center gap-1 text-green-600">
-                            <DollarSign className="h-4 w-4" />
-                            <span className="font-semibold">
-                              {item.currency || '$'}{(item.price_cents / 100).toFixed(2)}
-                            </span>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {item.price_cents && (
+                            <div className="flex items-center gap-1 text-green-600">
+                              <DollarSign className="h-4 w-4" />
+                              <span className="font-semibold">
+                                {item.currency || '$'}{(item.price_cents / 100).toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => handleEditItem(item)}
+                            className="h-8 w-8 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                          title="Edit item"
+                        >
+                            <Edit2 className="h-4 w-4" />
+                        </Button>
+                        </div>
                       </div>
                       
                       <Badge className={getCategoryColor(item.category || 'meal')}>
@@ -255,6 +279,13 @@ export function BrandDetailModal({
           brand={brand}
         />
       )}
+
+      {/* Edit Menu Item Modal */}
+      <EditBrandMenuItemModal
+        isOpen={showEditItemModal}
+        onClose={handleCloseEditModal}
+        item={editingItem}
+      />
     </>
   )
 } 

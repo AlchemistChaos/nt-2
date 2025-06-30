@@ -10,9 +10,9 @@ import { DayNavigation } from '@/components/custom/DayNavigation'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Send, LogOut, Settings, Target, BookOpen, Clock, Calendar } from 'lucide-react'
+import { Send, LogOut, Settings, Target, BookOpen, Clock, Calendar, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useMealsForDate, useChatMessages, useDailyTargetForDate, queryKeys } from '@/lib/supabase/client-cache'
+import { useMealsForDate, useChatMessages, useDailyTargetForDate, queryKeys, useClearChatMessages } from '@/lib/supabase/client-cache'
 import { useQueryClient } from '@tanstack/react-query'
 import { getTodayDateString, isPastDate, formatDateForDisplay } from '@/lib/utils/date'
 
@@ -35,6 +35,7 @@ export function MainPageClient({ user }: MainPageClientProps) {
   
 
   const queryClient = useQueryClient()
+  const clearChatMessages = useClearChatMessages()
   
   // Use local state for real-time updates, but sync with cached messages
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -103,17 +104,69 @@ useEffect(() => {
   }, [messages, shouldAutoScroll])
 
   const refreshMeals = async () => {
-    const queryKey = queryKeys.mealsForDate(user.id, selectedDate)
+    const currentDateQueryKey = queryKeys.mealsForDate(user.id, selectedDate)
+    const todayQueryKey = queryKeys.todaysMeals(user.id)
     
-    // Remove the query entirely and force a fresh fetch
-    queryClient.removeQueries({ queryKey })
-    await queryClient.invalidateQueries({ queryKey })
-    await queryClient.refetchQueries({ queryKey })
+    console.log('🔄 refreshMeals called for:', { 
+      userId: user.id, 
+      selectedDate, 
+      currentDateQueryKey, 
+      todayQueryKey 
+    })
+    
+    try {
+      // 1. Remove queries to force fresh fetch
+      queryClient.removeQueries({ queryKey: currentDateQueryKey })
+      if (selectedDate === getTodayDateString()) {
+        queryClient.removeQueries({ queryKey: todayQueryKey })
+      }
+      console.log('🗑️ Removed cached queries')
+      
+      // 2. Invalidate and refetch in parallel for better performance
+      const promises = [
+        queryClient.invalidateQueries({ queryKey: currentDateQueryKey }),
+        queryClient.refetchQueries({ queryKey: currentDateQueryKey }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.userDays(user.id) })
+      ]
+      
+      // Only invalidate today's meals if we're on today's date
+      if (selectedDate === getTodayDateString()) {
+        promises.push(
+          queryClient.invalidateQueries({ queryKey: todayQueryKey }),
+          queryClient.refetchQueries({ queryKey: todayQueryKey })
+        )
+      }
+      
+      await Promise.all(promises)
+      console.log('✅ refreshMeals completed successfully')
+      
+    } catch (error) {
+      console.error('❌ Error in refreshMeals:', error)
+      throw error
+    }
   }
 
   const refreshMessages = async () => {
     // Use React Query to invalidate and refetch chat messages for selected date
     await queryClient.invalidateQueries({ queryKey: queryKeys.chatMessages(user.id, selectedDate, 20) })
+  }
+
+  const handleClearChat = async () => {
+    if (!confirm('Clear all chat messages for this day? This cannot be undone.')) {
+      return
+    }
+
+    try {
+      await clearChatMessages.mutateAsync({
+        userId: user.id,
+        date: selectedDate
+      })
+      // Clear local messages immediately for better UX
+      setMessages([])
+    } catch (error) {
+      console.error('Error clearing chat messages:', error)
+      alert('Failed to clear chat messages. Please try again.')
+    }
   }
 
   const handleSignOut = async () => {
@@ -245,6 +298,17 @@ useEffect(() => {
               if (data === '[DONE]') {
                 // Refresh messages cache when streaming is complete
                 await refreshMessages()
+                
+                // Also force a final meal refresh in case any actions were processed
+                // This ensures the UI is updated even if individual action refreshes failed
+                setTimeout(async () => {
+                  try {
+                    console.log('🔄 Final meal refresh after streaming complete')
+                    await refreshMeals()
+                  } catch (error) {
+                    console.error('❌ Final meal refresh failed:', error)
+                  }
+                }, 100)
                 break
               }
 
@@ -264,16 +328,42 @@ useEffect(() => {
 
                 if (parsed.action) {
                   // Handle actions (meal logged, preference updated, etc.)
-                  // Refresh meals if needed
-                  if (parsed.action.type === 'meal_logged' || parsed.action.type === 'meal_planned' || parsed.action.type === 'meal_updated') {
-                    // Add a small delay to ensure database write is complete
-                    setTimeout(async () => {
-                      try {
-                        await refreshMeals()
-                      } catch (error) {
-                        console.error('Error refreshing meals:', error)
-                      }
-                    }, 100) // 100ms delay should be enough
+                  console.log('🎬 ACTION RECEIVED:', parsed.action)
+                  
+                  // Handle different action types
+                  switch (parsed.action.type) {
+                    case 'meal_logged':
+                    case 'meal_planned':
+                    case 'meal_updated':
+                      console.log('🔄 TRIGGERING MEAL REFRESH for action:', parsed.action.type)
+                      
+                      // Multiple refresh attempts with different delays
+                      const refreshAttempts = [200, 500, 1000, 2000] // ms delays
+                      
+                      refreshAttempts.forEach((delay, index) => {
+                        setTimeout(async () => {
+                          try {
+                            console.log(`🔄 Meal refresh attempt ${index + 1}/${refreshAttempts.length} (${delay}ms delay)`)
+                            await refreshMeals()
+                            console.log(`✅ Meal refresh attempt ${index + 1} completed successfully`)
+                          } catch (error) {
+                            console.error(`❌ Meal refresh attempt ${index + 1} failed:`, error)
+                          }
+                        }, delay)
+                      })
+                      break
+                      
+                    case 'preference_updated':
+                      console.log('🔄 Preference updated, no refresh needed')
+                      break
+                      
+                    case 'error':
+                      console.error('❌ Action processing error received:', parsed.action.error)
+                      break
+                      
+                    default:
+                      console.log('ℹ️ Unknown action type:', parsed.action.type)
+                      break
                   }
                 }
               } catch {
@@ -409,6 +499,64 @@ useEffect(() => {
                   🗑️ Clear
                 </Button>
               )}
+              {/* Debug button to log current meals */}
+              {process.env.NODE_ENV === 'development' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    console.log('📊 Current meals from UI:', meals)
+                    console.log('📊 Current date:', selectedDate)
+                    console.log('📊 Is today:', selectedDate === getTodayDateString())
+                    alert(`Found ${meals.length} meals. Check console for details.`)
+                  }}
+                  className="h-8 text-xs px-2"
+                  title="Log current meals to console (dev only)"
+                >
+                  🔍 Debug
+                </Button>
+              )}
+              {/* Fix banana bread meal type */}
+              {process.env.NODE_ENV === 'development' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    const bananaBreakfastMeal = meals.find(m => 
+                      m.meal_name?.toLowerCase().includes('banana bread') && 
+                      m.meal_type === 'breakfast'
+                    )
+                    
+                    if (bananaBreakfastMeal) {
+                      try {
+                        const response = await fetch('/api/debug/fix-meal-type', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            mealId: bananaBreakfastMeal.id,
+                            newMealType: 'dinner'
+                          })
+                        })
+                        
+                        if (response.ok) {
+                          alert('Fixed! Banana bread moved to dinner.')
+                          await refreshMeals()
+                        } else {
+                          alert('Error fixing meal')
+                        }
+                      } catch (error) {
+                        alert('Error: ' + error)
+                      }
+                    } else {
+                      alert('No banana bread breakfast meal found to fix')
+                    }
+                  }}
+                  className="h-8 text-xs px-2"
+                  title="Fix banana bread meal type (dev only)"
+                >
+                  🍌 Fix
+                </Button>
+              )}
                 <Button
                 variant="ghost"
                 size="icon"
@@ -491,6 +639,19 @@ useEffect(() => {
                   className="min-h-[44px] text-sm sm:text-base w-full"
                 />
               </div>
+              
+              {messages.length > 0 && (
+                <Button
+                  onClick={handleClearChat}
+                  disabled={clearChatMessages.isPending}
+                  size="icon"
+                  variant="outline"
+                  className="h-11 w-11 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  title="Clear chat messages"
+                >
+                  <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
+                </Button>
+              )}
               
               {!isReadOnly && (
                 <ImageUploadButton

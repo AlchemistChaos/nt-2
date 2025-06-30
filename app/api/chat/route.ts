@@ -14,7 +14,38 @@ import {
 import { createClient } from '@/lib/supabase/server'
 import { getMealTypeFromTime } from '@/lib/utils'
 
+// Validate and normalize portion size values
+function validatePortionSize(portionSize: string | undefined): string {
+  if (!portionSize || typeof portionSize !== 'string') {
+    return 'full'
+  }
+  
+  const validPortions = ['1/4', '1/2', '3/4', 'full', '2x']
+  const normalized = portionSize.toLowerCase().trim()
+  
+  // Check if already valid
+  if (validPortions.includes(portionSize)) {
+    return portionSize
+  }
+  
+  // Convert common variations
+  const conversions: { [key: string]: string } = {
+    'half': '1/2',
+    'quarter': '1/4',
+    'three quarters': '3/4',
+    'double': '2x',
+    '2': '2x',
+    'twice': '2x',
+    'whole': 'full',
+    'complete': 'full',
+    'entire': 'full'
+  }
+  
+  return conversions[normalized] || 'full'
+}
+
 export async function POST(request: NextRequest) {
+  console.log('🚀 CHAT API CALLED - YOU SHOULD SEE THIS LOG!')
   try {
     // Check if OpenAI API key is configured
     if (!process.env.OPENAI_API_KEY) {
@@ -130,11 +161,22 @@ ${recentMessages.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n')}`
           }
 
           // Process the full response for intent recognition
-          const action = await processIntentAndTakeAction(fullResponse, message, image, user.id)
-          
-          // Send action if any
-          if (action) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ action })}\n\n`))
+          try {
+            const action = await processIntentAndTakeAction(fullResponse, message, image, user.id)
+            
+            // Send action if any - with confirmation that it worked
+            if (action) {
+              console.log('✅ Action processed successfully, sending to client:', action)
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ action })}\n\n`))
+            } else {
+              console.log('🔍 No action was processed from the response')
+            }
+          } catch (actionError) {
+            console.error('❌ Error processing intent/action:', actionError)
+            // Send error action to client so it knows something failed
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+              action: { type: 'error', error: 'Failed to process action' } 
+            })}\n\n`))
           }
 
           // Save assistant message
@@ -181,6 +223,7 @@ async function processIntentAndTakeAction(
   userId: string
 ) {
   const lowerMessage = userMessage.toLowerCase()
+  console.log('🤔 Processing intent for message:', userMessage)
 
   try {
     // Intent: Update preference (CHECK THIS FIRST!)
@@ -223,7 +266,9 @@ async function processIntentAndTakeAction(
         (lowerMessage.includes('log') && !lowerMessage.includes('preference')) ||
         (lowerMessage.includes('for') && (lowerMessage.includes('lunch') || lowerMessage.includes('breakfast') || lowerMessage.includes('dinner') || lowerMessage.includes('snack')))
     ) {
-            const mealsData = await processMealFromMessage(userMessage, image)
+      console.log('🎯 Meal intent detected! Processing message:', userMessage)
+      const mealsData = await processMealFromMessage(userMessage, image)
+      console.log('📊 Processed meal data:', mealsData)
       
       if (mealsData && Array.isArray(mealsData) && mealsData.length > 0) {
         
@@ -233,17 +278,37 @@ async function processIntentAndTakeAction(
           // Process each meal individually
           for (const mealData of mealsData) {
             if (mealData.name) {
-              const meal = await addMeal(userId, {
-                meal_name: mealData.name,
-                meal_type: mealData.type || getMealTypeFromTime(),
-                date: new Date().toISOString().split('T')[0], // Add required date field
-                kcal_total: mealData.calories,
-                g_protein: mealData.protein,
-                g_carb: mealData.carbs,
-                g_fat: mealData.fat,
-                status: 'logged'
-              })
-              savedMeals.push(meal)
+              try {
+                console.log('💾 Attempting to save meal:', {
+                  name: mealData.name,
+                  type: mealData.type || getMealTypeFromTime(),
+                  calories: mealData.calories,
+                  portion: mealData.portionSize
+                })
+                
+                const meal = await addMeal(userId, {
+                  meal_name: mealData.name,
+                  meal_type: mealData.type || getMealTypeFromTime(),
+                  portion_size: validatePortionSize(mealData.portionSize),
+                  date: new Date().toISOString().split('T')[0],
+                  kcal_total: mealData.calories,
+                  g_protein: mealData.protein,
+                  g_carb: mealData.carbs,
+                  g_fat: mealData.fat,
+                  status: 'logged' as const
+                })
+                
+                if (meal) {
+                  console.log('✅ Meal saved successfully:', meal.id, meal.meal_name)
+                  savedMeals.push(meal)
+                } else {
+                  console.error('❌ Failed to save meal - returned null:', mealData.name)
+                }
+              } catch (error) {
+                console.error('❌ Error saving meal:', mealData.name, error)
+              }
+            } else {
+              console.warn('⚠️ Skipping meal with no name:', mealData)
             }
           }
           
@@ -276,8 +341,9 @@ async function processIntentAndTakeAction(
             const meal = await addMeal(userId, {
               meal_name: mealData.name,
               meal_type: mealData.type || getMealTypeFromTime(),
-              date: new Date().toISOString().split('T')[0], // Add required date field
-              status: 'planned'
+              portion_size: validatePortionSize(mealData.portionSize),
+              date: new Date().toISOString().split('T')[0],
+              status: 'planned' as const
             })
             savedMeals.push(meal)
           }
@@ -319,6 +385,7 @@ async function processIntentAndTakeAction(
     console.error('Intent processing error:', error)
   }
 
+  console.log('❌ No intent matched for message:', userMessage)
   return null
 }
 
@@ -446,7 +513,9 @@ Examples:
 async function processMealFromMessage(userMessage: string, image?: string) {
   try {
     // First, try to extract foods with their meal types
+    console.log('🔍 Extracting foods from message:', userMessage)
     const extractedFoods = await extractFoodsWithMealTypes(userMessage)
+    console.log('🥘 Extracted foods:', extractedFoods)
     
     if (extractedFoods && extractedFoods.length > 0) {
       const processedMeals = []
@@ -456,23 +525,36 @@ async function processMealFromMessage(userMessage: string, image?: string) {
         const libraryMatch = await findLibraryMatch(food.name)
         
         if (libraryMatch) {
-          // Use precise library data with extracted meal type
+          // Use precise library data and let AI calculate portion nutrition
+          const portionAdjustedNutrition = await getAIPortionCalculation(
+            food.name,
+            food.portionSize || 'full',
+            {
+              calories: libraryMatch.calories || 0,
+              protein: libraryMatch.protein || 0,
+              carbs: libraryMatch.carbs || 0,
+              fat: libraryMatch.fat || 0
+            }
+          )
+          
           processedMeals.push({
             name: libraryMatch.name,
             type: food.type || extractMealType(userMessage),
-            calories: libraryMatch.calories,
-            protein: libraryMatch.protein,
-            carbs: libraryMatch.carbs,
-            fat: libraryMatch.fat,
+            portionSize: food.portionSize || 'full',
+            calories: portionAdjustedNutrition.calories,
+            protein: portionAdjustedNutrition.protein,
+            carbs: portionAdjustedNutrition.carbs,
+            fat: portionAdjustedNutrition.fat,
             source: `Library (${libraryMatch.brand})`
           })
         } else {
-          // Fall back to AI estimation with extracted meal type
-          const aiEstimate = await getAIFoodEstimate(food.name, userMessage)
+          // Fall back to AI estimation with portion calculation included
+          const aiEstimate = await getAIFoodEstimate(food.name, userMessage, false, food.portionSize)
           if (aiEstimate) {
             processedMeals.push({
               ...aiEstimate,
               type: food.type || aiEstimate.type,
+              portionSize: food.portionSize || 'full',
               source: 'AI Estimate'
             })
           }
@@ -493,8 +575,8 @@ async function processMealFromMessage(userMessage: string, image?: string) {
   }
 }
 
-// Extract food names WITH their meal types from the user message
-async function extractFoodsWithMealTypes(userMessage: string): Promise<Array<{name: string, type?: string}>> {
+// Extract food names WITH their meal types and portion sizes from the user message
+async function extractFoodsWithMealTypes(userMessage: string): Promise<Array<{name: string, type?: string, portionSize?: string}>> {
   try {
     if (!process.env.OPENAI_API_KEY) {
       console.error('OpenAI API key not configured')
@@ -503,24 +585,35 @@ async function extractFoodsWithMealTypes(userMessage: string): Promise<Array<{na
 
     const openai = getOpenAI()
     
-    const extractionPrompt = `Extract food names with their meal types from this message. Return a JSON array of objects.
+    const extractionPrompt = `Extract food names with their meal types and portion sizes from this message. Return a JSON array of objects.
 
 User message: "${userMessage}"
 
-Return format: [{"name": "food1", "type": "breakfast|lunch|dinner|snack"}, ...]
+Return format: [{"name": "food1", "type": "breakfast|lunch|dinner|snack", "portionSize": "1/2|3/4|1/4|2x|full"}, ...]
 
 Rules:
 1. Extract ONLY food names (e.g., "protein pancake", "snickers drink")
-2. Determine meal type from context around each food
-3. Remove phrases like "add", "had", "for"
-4. Each food should be a separate object with name and type
-5. If meal type not specified for a food, use null for type
-6. If no foods found, return empty array []
+2. Determine meal type STRICTLY from the explicit context words in the message - ignore food associations
+3. Look for explicit meal type keywords: "breakfast", "lunch", "dinner", "snack"
+4. NEVER assume meal type based on the food item itself - only use explicit context
+5. Extract portion size if mentioned (1/2, 3/4, 1/4, half, quarter, full, 2x, etc.)
+6. Remove phrases like "add", "had", "for"
+7. Each food should be a separate object with name, type, and portionSize
+8. If meal type not explicitly mentioned for a food, use null for type
+9. If portion size not specified, use "full" as default
+10. Convert text portions to fractions (half → 1/2, quarter → 1/4, three quarters → 3/4)
+11. If no foods found, return empty array []
+
+CRITICAL: Pay attention to explicit meal context words like "for breakfast", "for lunch", "for dinner", "for snack" and use ONLY those words to determine meal type.
 
 Examples:
-- "add banana bread for breakfast" → [{"name": "banana bread", "type": "breakfast"}]
-- "add protein pancake for dinner. add snickers drink for snack." → [{"name": "protein pancake", "type": "dinner"}, {"name": "snickers drink", "type": "snack"}]
-- "i had banana bread and eggs" → [{"name": "banana bread", "type": null}, {"name": "eggs", "type": null}]`
+- "add banana bread for breakfast" → [{"name": "banana bread", "type": "breakfast", "portionSize": "full"}]
+- "i had half a banana bread for dinner" → [{"name": "banana bread", "type": "dinner", "portionSize": "1/2"}]
+- "i had 3/4 of a salmon avocado toast for breakfast" → [{"name": "salmon avocado toast", "type": "breakfast", "portionSize": "3/4"}]
+- "half a protein bar for snack" → [{"name": "protein bar", "type": "snack", "portionSize": "1/2"}]
+- "i ate a quarter of the pizza" → [{"name": "pizza", "type": null, "portionSize": "1/4"}]
+- "2 protein pancakes for dinner" → [{"name": "protein pancake", "type": "dinner", "portionSize": "2x"}]
+- "i had cereal for dinner" → [{"name": "cereal", "type": "dinner", "portionSize": "full"}]`
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -548,7 +641,7 @@ Examples:
 }
 
 // Get AI nutrition estimate for a food (fallback method)
-async function getAIFoodEstimate(foodName: string, originalMessage: string, isFullMessage = false) {
+async function getAIFoodEstimate(foodName: string, originalMessage: string, isFullMessage = false, portionSize?: string) {
   try {
     if (!process.env.OPENAI_API_KEY) {
       console.error('OpenAI API key not configured for meal processing')
@@ -578,18 +671,18 @@ Please respond with ONLY a JSON object in this exact format:
 }`
       : `You are a nutrition expert. Provide nutritional information for this specific food item.
 
-Food: "${foodName}"
+Food: "${foodName}"${portionSize ? `\nPortion: ${portionSize}` : ''}
 
 Please respond with ONLY a JSON object in this exact format:
 {
   "foodItem": "${foodName}",
-  "calories": number (estimated calories for a typical serving),
+  "calories": number (estimated calories${portionSize ? ` for ${portionSize} portion` : ' for a typical serving'}),
   "protein": number (grams of protein),
   "carbs": number (grams of carbohydrates),
   "fat": number (grams of fat)
 }
 
-Use realistic nutritional values for a typical serving size.`
+${portionSize ? `Calculate nutrition values for "${portionSize}" portion. If "${portionSize}" is "1/2" or "half", use half the typical serving nutrition. If "3/4", use 3/4 of typical nutrition, etc.` : 'Use realistic nutritional values for a typical serving size.'}`
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -652,6 +745,69 @@ function extractMealType(message: string): string | undefined {
   if (lower.includes('dinner')) return 'dinner'
   if (lower.includes('snack')) return 'snack'
   return undefined
+}
+
+// Let AI calculate portion-adjusted nutrition from known nutrition values
+async function getAIPortionCalculation(
+  foodName: string,
+  portionSize: string,
+  fullPortionNutrition: { calories: number; protein: number; carbs: number; fat: number }
+) {
+  try {
+    const openai = getOpenAI()
+    
+    const prompt = `Calculate the nutrition for a specific portion size.
+
+Food: ${foodName}
+Portion: ${portionSize}
+Full portion nutrition:
+- Calories: ${fullPortionNutrition.calories}
+- Protein: ${fullPortionNutrition.protein}g
+- Carbs: ${fullPortionNutrition.carbs}g  
+- Fat: ${fullPortionNutrition.fat}g
+
+Calculate the nutrition for "${portionSize}" and respond with ONLY a JSON object:
+{
+  "calories": number,
+  "protein": number,
+  "carbs": number,
+  "fat": number
+}
+
+Examples:
+- If portion is "1/2" or "half", multiply all values by 0.5
+- If portion is "3/4", multiply all values by 0.75
+- If portion is "2x" or "double", multiply all values by 2
+- If portion is "full", use the original values`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: prompt },
+        { role: 'user', content: `Calculate nutrition for ${portionSize} of ${foodName}` }
+      ],
+      temperature: 0.1,
+      max_tokens: 150
+    })
+
+    const content = response.choices[0]?.message?.content
+    if (!content) return fullPortionNutrition
+
+    try {
+      const result = JSON.parse(content.trim())
+      return {
+        calories: Math.round(result.calories || 0),
+        protein: Math.round((result.protein || 0) * 10) / 10,
+        carbs: Math.round((result.carbs || 0) * 10) / 10,
+        fat: Math.round((result.fat || 0) * 10) / 10
+      }
+    } catch {
+      return fullPortionNutrition
+    }
+  } catch (error) {
+    console.error('AI portion calculation error:', error)
+    return fullPortionNutrition
+  }
 }
 
 function extractPreferenceFromMessage(message: string) {

@@ -155,55 +155,55 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
             Brands ({brands.length})
           </h2>
           
-          {brandsLoading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-gray-500 mt-2">Loading brands...</p>
-            </div>
-          ) : brandsError ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <Star className="h-12 w-12 text-red-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-red-700 mb-2">Error Loading Brands</h3>
-                <p className="text-gray-500 mb-4">
-                  There was an issue fetching the brands. Please try again later.
-                </p>
-                <pre className="text-xs text-left bg-red-50 p-2 rounded">{brandsFetchError?.message}</pre>
-              </CardContent>
-            </Card>
-          ) : filteredBrands.length === 0 ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <Star className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No brands found</h3>
-                <p className="text-gray-500 mb-4">
+            {brandsLoading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="text-gray-500 mt-2">Loading brands...</p>
+              </div>
+            ) : brandsError ? (
+              <Card>
+                <CardContent className="text-center py-8">
+                  <Star className="h-12 w-12 text-red-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-red-700 mb-2">Error Loading Brands</h3>
+                  <p className="text-gray-500 mb-4">
+                    There was an issue fetching the brands. Please try again later.
+                  </p>
+                  <pre className="text-xs text-left bg-red-50 p-2 rounded">{brandsFetchError?.message}</pre>
+                </CardContent>
+              </Card>
+            ) : filteredBrands.length === 0 ? (
+              <Card>
+                <CardContent className="text-center py-8">
+                  <Star className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No brands found</h3>
+                  <p className="text-gray-500 mb-4">
                   {searchQuery ? 'No brands match your search.' : 'Add brands to organize your menu items.'}
-                </p>
-                {!searchQuery && (
-                  <Button onClick={() => setShowCreateBrandModal(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Brand
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredBrands.map((brand) => (
-                <BrandCard
-                  key={brand.id}
-                  brand={brand}
-                  brandStats={brandStats[brand.id]}
-                  onEdit={handleEditBrand}
-                  onViewDetails={handleViewBrandDetails}
-                  onBrandUpdated={() => {
-                    // React Query will automatically refetch
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+                  </p>
+                  {!searchQuery && (
+                    <Button onClick={() => setShowCreateBrandModal(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Brand
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredBrands.map((brand) => (
+                  <BrandCard
+                    key={brand.id}
+                    brand={brand}
+                    brandStats={brandStats[brand.id]}
+                    onEdit={handleEditBrand}
+                    onViewDetails={handleViewBrandDetails}
+                    onBrandUpdated={() => {
+                      // React Query will automatically refetch
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+              </div>
       </div>
 
       {/* Modals */}
@@ -236,7 +236,7 @@ export function LibraryPageClient({ user }: LibraryPageClientProps) {
           importSource={importSource}
           onComplete={handleImportComplete}
           onCancel={handleImportCancel}
-        />
+      />
       )}
     </div>
   )

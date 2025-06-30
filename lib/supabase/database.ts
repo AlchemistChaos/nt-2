@@ -73,7 +73,9 @@ export async function addMeal(
 ): Promise<Meal | null> {
   const supabase = await createClient()
   
-  const { data: meal } = await supabase
+  console.log('🔍 addMeal called with:', { userId, mealData })
+  
+  const { data: meal, error } = await supabase
     .from('meals')
     .insert({
       user_id: userId,
@@ -82,6 +84,14 @@ export async function addMeal(
     .select()
     .single()
 
+  if (error) {
+    console.error('💥 Database error in addMeal:', error)
+    console.error('💥 Failed meal data:', { userId, mealData })
+    console.error('💥 Error details:', error.message, error.code)
+    return null
+  }
+
+  console.log('✅ Meal saved successfully to database:', meal)
   return meal
 }
 
@@ -528,9 +538,54 @@ export async function convertMealsToDate(
   }
 }
 
-export async function convertTodaysToYesterday(userId: string): Promise<{ movedCount: number; meals: Meal[] }> {
+export async function convertTodaysToYesterday(userId: string): Promise<{ 
+  movedMealsCount: number; 
+  movedMessagesCount: number;
+  meals: Meal[];
+  messages: ChatMessage[];
+}> {
+  const supabase = await createClient()
   const today = new Date().toISOString().split('T')[0]
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   
-  return convertMealsToDate(userId, today, yesterday)
+  // Move meals to yesterday
+  const mealResult = await convertMealsToDate(userId, today, yesterday)
+  
+  // Also move chat messages to yesterday
+  const { data: messagesToMove, error: fetchMessagesError } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('date', today)
+
+  if (fetchMessagesError) {
+    console.error('Error fetching chat messages to move:', fetchMessagesError)
+    throw new Error('Failed to fetch chat messages')
+  }
+
+  let movedMessages: ChatMessage[] = []
+  
+  if (messagesToMove && messagesToMove.length > 0) {
+    // Update all chat messages to yesterday's date
+    const { data: updatedMessages, error: updateMessagesError } = await supabase
+      .from('chat_messages')
+      .update({ date: yesterday })
+      .eq('user_id', userId)
+      .eq('date', today)
+      .select()
+
+    if (updateMessagesError) {
+      console.error('Error updating chat message dates:', updateMessagesError)
+      throw new Error('Failed to move chat messages to new date')
+    }
+
+    movedMessages = updatedMessages || []
+  }
+  
+  return { 
+    movedMealsCount: mealResult.movedCount,
+    movedMessagesCount: movedMessages.length,
+    meals: mealResult.meals,
+    messages: movedMessages
+  }
 } 

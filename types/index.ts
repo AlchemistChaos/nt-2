@@ -21,6 +21,7 @@ export interface Meal {
   date: string;
   meal_name?: string;
   meal_type?: string;
+  portion_size?: string; // e.g., "1/2", "3/4", "2x", "full"
   kcal_total?: number;
   g_protein?: number;
   g_carb?: number;

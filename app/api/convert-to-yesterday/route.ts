@@ -9,13 +9,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Convert today's meals to yesterday
+    // Convert today's meals and chat messages to yesterday
     const result = await convertTodaysToYesterday(user.id)
+
+    console.log(
+      `Converted ${result.movedMealsCount} meals and ${result.movedMessagesCount} chat messages to yesterday for user ${user.id}`
+    )
 
     return NextResponse.json({
       success: true,
-      movedCount: result.movedCount,
-      meals: result.meals
+      movedMealsCount: result.movedMealsCount,
+      movedMessagesCount: result.movedMessagesCount,
+      meals: result.meals,
+      messages: result.messages
     })
 
   } catch (error) {

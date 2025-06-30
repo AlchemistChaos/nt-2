@@ -5,7 +5,7 @@ import { MealWithItems } from '@/types'
 import { formatTime } from '@/lib/utils'
 import { Clock, Utensils, Plus, X, Edit3 } from 'lucide-react'
 import { useState } from 'react'
-import { deleteMeal } from '@/lib/supabase/database-client'
+import { useDeleteMeal, useCurrentUser } from '@/lib/supabase/client-cache'
 import { EditMealModal } from './EditMealModal'
 
 interface CarouselCardProps {
@@ -26,7 +26,9 @@ export function CarouselCard({
   onMealDeleted 
 }: CarouselCardProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
+  
+  const { data: user } = useCurrentUser()
+  const deleteMealMutation = useDeleteMeal()
 
   // Use meals array or fallback to single meal
   const mealsList = meals || (meal ? [meal] : [])
@@ -44,22 +46,19 @@ export function CarouselCard({
   )
 
   const handleDelete = async (mealToDelete: MealWithItems) => {
-    if (isDeleting) return
+    if (deleteMealMutation.isPending || !user) return
     
     if (confirm('Are you sure you want to delete this meal?')) {
-      setIsDeleting(true)
       try {
-        const success = await deleteMeal(mealToDelete.id)
-        if (success) {
+        await deleteMealMutation.mutateAsync({
+          mealId: mealToDelete.id,
+          userId: user.id,
+          date: mealToDelete.date
+        })
           onMealDeleted?.()
-        } else {
-          alert('Failed to delete meal. Please try again.')
-        }
       } catch (error) {
         console.error('Error deleting meal:', error)
         alert('Failed to delete meal. Please try again.')
-      } finally {
-        setIsDeleting(false)
       }
     }
   }
@@ -99,17 +98,17 @@ export function CarouselCard({
         <CardContent className="p-2 sm:p-3 h-full flex flex-col">
           {/* Action buttons - show on hover, only if we have meals */}
           {hasMeals && (
-            <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               {firstMeal && (
-                <button
+            <button
                   onClick={() => handleEdit(firstMeal)}
-                  className="p-0.5 bg-white rounded-full shadow-md hover:bg-gray-50 transition-colors"
-                  title="Edit meal"
-                >
-                  <Edit3 className="h-2.5 w-2.5 text-gray-600" />
-                </button>
+              className="p-0.5 bg-white rounded-full shadow-md hover:bg-gray-50 transition-colors"
+              title="Edit meal"
+            >
+              <Edit3 className="h-2.5 w-2.5 text-gray-600" />
+            </button>
               )}
-            </div>
+          </div>
           )}
 
           {/* Header */}
@@ -122,15 +121,15 @@ export function CarouselCard({
             </div>
             <div className="flex gap-1">
               {hasPlannedMeals && (
-                <span className="text-xs bg-blue-100 text-blue-700 px-1 py-0.5 rounded-full">
+              <span className="text-xs bg-blue-100 text-blue-700 px-1 py-0.5 rounded-full">
                   {mealsList.filter(m => m.status === 'planned').length} planned
                 </span>
               )}
               {hasLoggedMeals && (
                 <span className="text-xs bg-green-100 text-green-700 px-1 py-0.5 rounded-full">
                   {mealsList.filter(m => m.status === 'logged').length} logged
-                </span>
-              )}
+              </span>
+            )}
             </div>
           </div>
 
@@ -141,8 +140,13 @@ export function CarouselCard({
                 {mealsList.map((singleMeal, index) => (
                   <div key={singleMeal.id} className="flex items-center justify-between bg-gray-50 rounded p-1">
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium truncate">
+                      <div className="text-xs font-medium truncate flex items-center gap-1">
                         {singleMeal.meal_name || 'Unnamed meal'}
+                        {singleMeal.portion_size && singleMeal.portion_size !== 'full' && (
+                          <span className="text-xs bg-blue-100 text-blue-700 px-1 py-0.5 rounded">
+                            {singleMeal.portion_size}
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-gray-500 flex items-center gap-1">
                         <Clock className="h-2 w-2" />
@@ -151,7 +155,7 @@ export function CarouselCard({
                     </div>
                     <button
                       onClick={() => handleDelete(singleMeal)}
-                      disabled={isDeleting}
+                      disabled={deleteMealMutation.isPending}
                       className="p-0.5 hover:bg-red-100 rounded transition-colors disabled:opacity-50"
                       title="Delete meal"
                     >
@@ -183,8 +187,8 @@ export function CarouselCard({
                   </span>
                 )}
               </div>
-            </div>
-          )}
+              </div>
+            )}
         </CardContent>
       </Card>
 

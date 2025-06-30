@@ -5,7 +5,7 @@ import { CarouselCard } from './CarouselCard'
 import { MealWithItems, DailyTarget, User } from '@/types'
 import { ChevronLeft, ChevronRight, Zap, Beef, Wheat, Droplets, Calendar, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useConvertMealsToYesterday } from '@/lib/supabase/client-cache'
+import { useConvertMealsToYesterday, useChatMessages } from '@/lib/supabase/client-cache'
 import { getTodayDateString } from '@/lib/utils/date'
 
 interface CustomMealCarouselProps {
@@ -25,6 +25,13 @@ export function CustomMealCarousel({ meals, dailyTarget, user, selectedDate, onM
   const convertToYesterday = useConvertMealsToYesterday()
   const isToday = selectedDate === getTodayDateString()
   const hasMealsToday = meals.length > 0
+  
+  // Get today's chat messages to check if button should show
+  const { data: todaysChatMessages = [] } = useChatMessages(user.id, selectedDate, 50)
+  const hasChatMessagesToday = todaysChatMessages.length > 0
+  
+  // Show button if there are either meals OR chat messages for today
+  const hasContentToMove = hasMealsToday || hasChatMessagesToday
 
   const scroll = (direction: 'left' | 'right', containerRef: React.RefObject<HTMLDivElement | null>) => {
     if (!containerRef.current) return
@@ -51,8 +58,8 @@ export function CustomMealCarousel({ meals, dailyTarget, user, selectedDate, onM
     }),
     { calories: 0, protein: 0, carbs: 0, fat: 0 }
   )
-
-  // Group meals by type
+    
+    // Group meals by type
   const groupMealsByType = () => {
     const grouped = meals.reduce((acc, meal) => {
       const mealType = meal.meal_type || 'snack'
@@ -83,11 +90,18 @@ export function CustomMealCarousel({ meals, dailyTarget, user, selectedDate, onM
   const { mainMealCards, snackCards } = groupMealsByType()
 
   const handleConvertToYesterday = async () => {
-    if (!hasMealsToday) return
+    if (!hasContentToMove) return
     
-    const confirmed = confirm(
-      `Move all ${meals.length} meals from today to yesterday?\n\nThis will:\n• Move all today's meals to yesterday\n• Clear today for a fresh start\n• This action cannot be undone`
-    )
+    let confirmMessage = 'Move content from today to yesterday?\n\nThis will:\n'
+    if (hasMealsToday) {
+      confirmMessage += `• Move all ${meals.length} meals to yesterday\n`
+    }
+    if (hasChatMessagesToday) {
+      confirmMessage += `• Move all ${todaysChatMessages.length} chat messages to yesterday\n`
+    }
+    confirmMessage += '• Clear today for a fresh start\n• This action cannot be undone'
+    
+    const confirmed = confirm(confirmMessage)
     
     if (!confirmed) return
     
@@ -95,11 +109,16 @@ export function CustomMealCarousel({ meals, dailyTarget, user, selectedDate, onM
     try {
       const result = await convertToYesterday.mutateAsync(user.id)
       
-      if (result.success && result.movedCount > 0) {
-        alert(`Successfully moved ${result.movedCount} meals to yesterday!`)
+      if (result.success && (result.movedMealsCount > 0 || result.movedMessagesCount > 0)) {
+        let message = `Successfully moved ${result.movedMealsCount} meals`
+        if (result.movedMessagesCount > 0) {
+          message += ` and ${result.movedMessagesCount} chat messages`
+        }
+        message += ' to yesterday!'
+        alert(message)
         onMealUpdated?.() // Refresh the meals data
       } else {
-        alert('No meals found to move.')
+        alert('No meals or chat messages found to move.')
       }
     } catch (error) {
       console.error('Error converting meals to yesterday:', error)
@@ -131,15 +150,15 @@ export function CustomMealCarousel({ meals, dailyTarget, user, selectedDate, onM
           </div>
         </div>
         
-        {/* Convert to Yesterday Button - only show for today with meals */}
-        {isToday && hasMealsToday && (
+        {/* Convert to Yesterday Button - show for today with meals or chat messages */}
+        {isToday && hasContentToMove && (
           <Button
             variant="outline"
             size="sm"
             onClick={handleConvertToYesterday}
             disabled={isConverting}
             className="h-8 text-xs px-3 gap-1.5 border-orange-200 text-orange-700 hover:bg-orange-50 hover:border-orange-300"
-            title="Move all today's meals to yesterday and start fresh"
+            title="Move today's meals and chat messages to yesterday and start fresh"
           >
             <RotateCcw className="h-3 w-3" />
             {isConverting ? 'Moving...' : 'Convert to Yesterday'}
@@ -157,15 +176,15 @@ export function CustomMealCarousel({ meals, dailyTarget, user, selectedDate, onM
               size="icon"
               onClick={() => scroll('left', mainMealScrollRef)}
               className="h-6 w-6"
-            >
+          >
               <ChevronLeft className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
               onClick={() => scroll('right', mainMealScrollRef)}
               className="h-6 w-6"
-            >
+          >
               <ChevronRight className="h-3 w-3" />
             </Button>
           </div>
@@ -218,25 +237,25 @@ export function CustomMealCarousel({ meals, dailyTarget, user, selectedDate, onM
           </div>
         </div>
         
-        <div className="relative overflow-hidden">
-          <div
+      <div className="relative overflow-hidden">
+        <div
             ref={snackScrollRef}
-            className="flex gap-2 sm:gap-4 overflow-x-auto scrollbar-hide pb-2"
-            style={{
-              scrollbarWidth: 'none',
-              msOverflowStyle: 'none',
-            }}
-          >
+          className="flex gap-2 sm:gap-4 overflow-x-auto scrollbar-hide pb-2"
+          style={{
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}
+        >
             {snackCards.map((mealCard, index) => (
-              <CarouselCard
+            <CarouselCard
                 key={`snack-${index}`}
                 mealType={mealCard.type}
                 meals={mealCard.meals}
                 isPlaceholder={mealCard.isPlaceholder}
-                onMealUpdated={onMealUpdated}
-                onMealDeleted={onMealDeleted}
-              />
-            ))}
+              onMealUpdated={onMealUpdated}
+              onMealDeleted={onMealDeleted}
+            />
+          ))}
           </div>
         </div>
       </div>

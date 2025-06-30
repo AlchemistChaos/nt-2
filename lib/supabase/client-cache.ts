@@ -108,18 +108,9 @@ export function useMealsForDate(userId: string, date: string) {
   return useQuery({
     queryKey: queryKeys.mealsForDate(userId, date),
     queryFn: async (): Promise<MealWithItems[]> => {
-      console.log(`[useMealsForDate] Fetching meals for user: ${userId}, date: ${date}`)
+      const timestamp = new Date().toISOString()
+      console.log(`🔍 useMealsForDate query executing at ${timestamp} for:`, { userId, date })
       const supabase = getSupabaseClient()
-      
-      // First, let's check what meals exist for this user regardless of date
-      const { data: allMeals } = await supabase
-        .from('meals')
-        .select('id, date, meal_name, meal_type, user_id')
-        .eq('user_id', userId)
-        .order('logged_at', { ascending: false })
-        .limit(10)
-      
-      console.log(`[useMealsForDate] All recent meals for user:`, allMeals)
       
       const { data: meals, error } = await supabase
         .from('meals')
@@ -132,17 +123,18 @@ export function useMealsForDate(userId: string, date: string) {
         .order('logged_at', { ascending: true })
 
       if (error) {
-        console.error(`[useMealsForDate] Error fetching meals:`, error)
+        console.error('❌ Error fetching meals:', error)
         throw error
       }
 
-      console.log(`[useMealsForDate] Query params - userId: ${userId}, date: ${date}`)
-      console.log(`[useMealsForDate] Fetched ${meals?.length || 0} meals for ${date}`, meals)
+      console.log(`📊 useMealsForDate fetched ${meals?.length || 0} meals at ${timestamp}:`, 
+        meals?.map(m => ({ id: m.id, name: m.meal_name, type: m.meal_type })) || []
+      )
       return meals || []
     },
     enabled: !!userId && !!date,
-    staleTime: 0, // Make it always fresh for testing
-    gcTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 0, // Force fresh data every time - we'll manage caching ourselves
+    gcTime: 1 * 60 * 1000, // 1 minute
   })
 }
 
@@ -344,6 +336,42 @@ export function useAddMeal() {
   })
 }
 
+export function useDeleteMeal() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ mealId, userId, date }: {
+      mealId: string
+      userId: string
+      date: string
+    }) => {
+      const supabase = getSupabaseClient()
+      const { error } = await supabase
+        .from('meals')
+        .delete()
+        .eq('id', mealId)
+
+      if (error) {
+        console.error('Error deleting meal:', error)
+        throw error
+      }
+
+      return true
+    },
+    onSuccess: (_data, variables) => {
+      // Invalidate queries for the specific date and user
+      queryClient.invalidateQueries({ queryKey: queryKeys.mealsForDate(variables.userId, variables.date) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.todaysMeals(variables.userId) })
+      
+      // Also invalidate user days in case this was the last meal for a day
+      queryClient.invalidateQueries({ queryKey: queryKeys.userDays(variables.userId) })
+    },
+    onError: (error) => {
+      console.error('useDeleteMeal onError called:', error)
+    }
+  })
+}
+
 export function useAddChatMessage() {
   const queryClient = useQueryClient()
   
@@ -386,6 +414,40 @@ export function useAddChatMessage() {
   })
 }
 
+export function useClearChatMessages() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ userId, date }: {
+      userId: string
+      date: string
+    }) => {
+      const supabase = getSupabaseClient()
+      const { error } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('user_id', userId)
+        .eq('date', date)
+
+      if (error) {
+        console.error('Error clearing chat messages:', error)
+        throw error
+      }
+
+      return true
+    },
+    onSuccess: (_data, variables) => {
+      // Invalidate chat messages for the specific date
+      queryClient.invalidateQueries({ queryKey: queryKeys.chatMessages(variables.userId, variables.date, 20) })
+      // Also invalidate user days in case this was the last day with messages
+      queryClient.invalidateQueries({ queryKey: queryKeys.userDays(variables.userId) })
+    },
+    onError: (error) => {
+      console.error('useClearChatMessages onError called:', error)
+    }
+  })
+}
+
 export function useConvertMealsToYesterday() {
   const queryClient = useQueryClient()
   
@@ -405,7 +467,7 @@ export function useConvertMealsToYesterday() {
 
       return await response.json()
     },
-    onSuccess: (_data, userId) => {
+    onSuccess: (data, userId) => {
       // Invalidate queries for both today and yesterday to refresh the UI
       const today = new Date().toISOString().split('T')[0]
       const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -414,8 +476,16 @@ export function useConvertMealsToYesterday() {
       queryClient.invalidateQueries({ queryKey: queryKeys.mealsForDate(userId, today) })
       queryClient.invalidateQueries({ queryKey: queryKeys.mealsForDate(userId, yesterday) })
       
+      // Invalidate chat messages for both dates  
+      queryClient.invalidateQueries({ queryKey: queryKeys.chatMessages(userId, today, 20) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.chatMessages(userId, yesterday, 20) })
+      
       // Also invalidate user days to update the sidebar
       queryClient.invalidateQueries({ queryKey: queryKeys.userDays(userId) })
+      
+      console.log(
+        `Successfully moved ${data.movedMealsCount} meals and ${data.movedMessagesCount} chat messages to yesterday`
+      )
     },
   })
 }
@@ -662,6 +732,50 @@ export function useCreateBrandMenuItems() {
     },
     onError: (error) => {
       console.error('useCreateBrandMenuItems onError called:', error)
+    }
+  })
+}
+
+export function useUpdateBrandMenuItem() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ itemId, itemData }: {
+      itemId: string
+      itemData: Partial<Omit<BrandMenuItem, 'id' | 'brand_id' | 'imported_by' | 'created_at' | 'updated_at'>>
+    }) => {
+      console.log('useUpdateBrandMenuItem mutation called with:', { itemId, itemData })
+      const supabase = getSupabaseClient()
+      
+      const { data: updatedItem, error } = await supabase
+        .from('brand_menu_items')
+        .update(itemData)
+        .eq('id', itemId)
+        .select(`
+          *,
+          brand:brands(*)
+        `)
+        .single()
+
+      if (error) {
+        console.error('Supabase error updating brand menu item:', error)
+        throw error
+      }
+
+      console.log('Brand menu item updated successfully:', updatedItem)
+      return updatedItem
+    },
+    onSuccess: (data) => {
+      if (data?.brand_id) {
+        console.log('useUpdateBrandMenuItem onSuccess called, invalidating queries for brandId:', data.brand_id)
+        queryClient.invalidateQueries({ queryKey: queryKeys.brandMenuItems(data.brand_id) })
+      }
+      
+      // Also invalidate brands query to update any counts
+      queryClient.invalidateQueries({ queryKey: queryKeys.brands })
+    },
+    onError: (error) => {
+      console.error('useUpdateBrandMenuItem onError called:', error)
     }
   })
 } 

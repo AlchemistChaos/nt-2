@@ -6,9 +6,9 @@ import { ChatMessage } from './ChatMessage'
 import { ImageUploadButton } from './ImageUploadButton'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Send, X, Bot } from 'lucide-react'
+import { Send, X, Bot, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { useChatMessages } from '@/lib/supabase/client-cache'
+import { useChatMessages, useClearChatMessages } from '@/lib/supabase/client-cache'
 import { getTodayDateString } from '@/lib/utils/date'
 
 interface FloatingChatModalProps {
@@ -56,6 +56,7 @@ export function FloatingChatModal({ isOpen, onClose }: FloatingChatModalProps) {
     today, 
     10
   )
+  const clearChatMessages = useClearChatMessages()
   
   // Sync messages with cache
   useEffect(() => {
@@ -189,6 +190,24 @@ export function FloatingChatModal({ isOpen, onClose }: FloatingChatModalProps) {
     }
   }
 
+  const handleClearChat = async () => {
+    if (!user || !confirm('Clear all chat messages for today? This cannot be undone.')) {
+      return
+    }
+
+    try {
+      await clearChatMessages.mutateAsync({
+        userId: user.id,
+        date: today
+      })
+      // Clear local messages immediately for better UX
+      setMessages([])
+    } catch (error) {
+      console.error('Error clearing chat messages:', error)
+      alert('Failed to clear chat messages. Please try again.')
+    }
+  }
+
   if (!isOpen) return null
 
   return (
@@ -206,14 +225,28 @@ export function FloatingChatModal({ isOpen, onClose }: FloatingChatModalProps) {
               <p className="text-xs text-gray-500">Ask about goals, add meals, get insights</p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="h-8 w-8"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {messages.length > 0 && (
+              <Button
+                onClick={handleClearChat}
+                disabled={clearChatMessages.isPending}
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                title="Clear chat messages"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="h-8 w-8"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Messages */}
