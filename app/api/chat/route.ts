@@ -221,30 +221,48 @@ async function processIntentAndTakeAction(
         (lowerMessage.includes('log') && !lowerMessage.includes('preference')) ||
         (lowerMessage.includes('for') && (lowerMessage.includes('lunch') || lowerMessage.includes('breakfast') || lowerMessage.includes('dinner') || lowerMessage.includes('snack')))
     ) {
-      console.log('🍽️ [MEAL LOGGING] Intent detected for message:', userMessage)
+            console.log('🍽️ [MEAL LOGGING] Intent detected for message:', userMessage)
       
-      const mealData = await processMealFromMessage(userMessage, image)
-      console.log('🍽️ [MEAL LOGGING] Meal data extracted:', mealData)
+      const mealsData = await processMealFromMessage(userMessage, image)
+      console.log('🍽️ [MEAL LOGGING] Meal data extracted:', mealsData)
       
-      if (mealData && mealData.name) {
-        console.log('🍽️ [MEAL LOGGING] Attempting to save meal:', mealData)
+      if (mealsData && Array.isArray(mealsData) && mealsData.length > 0) {
+        console.log('🍽️ [MEAL LOGGING] Attempting to save', mealsData.length, 'meals')
         
-                 try {
-           const meal = await addMeal(userId, {
-             meal_name: mealData.name,
-             meal_type: mealData.type || getMealTypeFromTime(),
-             date: new Date().toISOString().split('T')[0], // Add required date field
-             kcal_total: mealData.calories,
-             g_protein: mealData.protein,
-             g_carb: mealData.carbs,
-             g_fat: mealData.fat,
-             status: 'logged'
-           })
-
-          console.log('🍽️ [MEAL LOGGING] ✅ Meal saved successfully:', meal)
-          return { type: 'meal_logged', data: meal }
+        try {
+          const savedMeals = []
+          
+          // Process each meal individually
+          for (const mealData of mealsData) {
+            if (mealData.name) {
+              const meal = await addMeal(userId, {
+                meal_name: mealData.name,
+                meal_type: mealData.type || getMealTypeFromTime(),
+                date: new Date().toISOString().split('T')[0], // Add required date field
+                kcal_total: mealData.calories,
+                g_protein: mealData.protein,
+                g_carb: mealData.carbs,
+                g_fat: mealData.fat,
+                status: 'logged'
+              })
+              
+              console.log('🍽️ [MEAL LOGGING] ✅ Meal saved successfully:', meal)
+              savedMeals.push(meal)
+            }
+          }
+          
+          if (savedMeals.length > 0) {
+            return { 
+              type: 'meal_logged', 
+              data: savedMeals.length === 1 ? savedMeals[0] : savedMeals,
+              count: savedMeals.length
+            }
+          } else {
+            console.log('🍽️ [MEAL LOGGING] ❌ No valid meals found to save')
+            return null
+          }
         } catch (error) {
-          console.error('🍽️ [MEAL LOGGING] ❌ Failed to save meal:', error)
+          console.error('🍽️ [MEAL LOGGING] ❌ Failed to save meals:', error)
           return null
         }
       } else {
@@ -255,16 +273,29 @@ async function processIntentAndTakeAction(
 
     // Intent: Plan a meal
     if (lowerMessage.includes('plan') && (lowerMessage.includes('meal') || lowerMessage.includes('dinner') || lowerMessage.includes('lunch') || lowerMessage.includes('breakfast'))) {
-      const mealData = await processMealFromMessage(userMessage, image)
-      if (mealData && mealData.name) {
-        const meal = await addMeal(userId, {
-          meal_name: mealData.name,
-          meal_type: mealData.type || getMealTypeFromTime(),
-          date: new Date().toISOString().split('T')[0], // Add required date field
-          status: 'planned'
-        })
-
-        return { type: 'meal_planned', data: meal }
+      const mealsData = await processMealFromMessage(userMessage, image)
+      if (mealsData && Array.isArray(mealsData) && mealsData.length > 0) {
+        const savedMeals = []
+        
+        for (const mealData of mealsData) {
+          if (mealData.name) {
+            const meal = await addMeal(userId, {
+              meal_name: mealData.name,
+              meal_type: mealData.type || getMealTypeFromTime(),
+              date: new Date().toISOString().split('T')[0], // Add required date field
+              status: 'planned'
+            })
+            savedMeals.push(meal)
+          }
+        }
+        
+        if (savedMeals.length > 0) {
+          return { 
+            type: 'meal_planned', 
+            data: savedMeals.length === 1 ? savedMeals[0] : savedMeals,
+            count: savedMeals.length
+          }
+        }
       }
     }
 
@@ -274,7 +305,9 @@ async function processIntentAndTakeAction(
       const plannedMeal = todaysMeals.find(m => m.status === 'planned')
       
       if (plannedMeal) {
-        const mealData = image ? await processMealFromMessage(userMessage, image) : null
+        const mealsData = image ? await processMealFromMessage(userMessage, image) : null
+        // Use first meal's data if multiple meals extracted
+        const mealData = mealsData && Array.isArray(mealsData) && mealsData.length > 0 ? mealsData[0] : null
         
         const updatedMeal = await updateMeal(plannedMeal.id, {
           status: 'logged',
@@ -306,34 +339,39 @@ async function processMealFromMessage(userMessage: string, image?: string) {
     const openai = getOpenAI()
     
     // Create a specialized prompt for meal extraction and nutrition calculation
-    const mealProcessingPrompt = `You are a nutrition expert. Extract the food item from the user's message and provide detailed nutritional information.
+    const mealProcessingPrompt = `You are a nutrition expert. Extract ALL food items from the user's message and provide detailed nutritional information for each.
 
 User message: "${userMessage}"
 
 Please respond with ONLY a JSON object in this exact format:
 {
-  "foodItem": "extracted food name (e.g., 'tuna', 'banana bread', 'salmon avocado')",
-  "mealType": "breakfast|lunch|dinner|snack or null if not specified",
-  "calories": number (estimated calories for a typical serving),
-  "protein": number (grams of protein),
-  "carbs": number (grams of carbohydrates),
-  "fat": number (grams of fat)
+  "foods": [
+    {
+      "foodItem": "extracted food name (e.g., 'banana bread', 'avocado on toast')",
+      "mealType": "breakfast|lunch|dinner|snack or null if not specified",
+      "calories": number (estimated calories for a typical serving),
+      "protein": number (grams of protein),
+      "carbs": number (grams of carbohydrates),
+      "fat": number (grams of fat)
+    }
+  ]
 }
 
 Rules:
-1. Extract ONLY the actual food item, not the entire message
-2. Remove phrases like "lets add", "i had", "for breakfast", etc.
-3. If multiple foods are mentioned, focus on the main item
-4. Provide realistic nutritional values for a typical serving size
-5. If you cannot identify a food item, return null for foodItem
-6. Be conservative with portion estimates (assume standard serving sizes)
-7. IMPORTANT: protein, carbs, and fat should be SEPARATE values, NOT totals or sums
-8. Each macronutrient should be calculated independently based on the food item
+1. Extract ALL separate food items mentioned in the message
+2. Each food item should be a separate object in the "foods" array
+3. Remove phrases like "lets add", "i had", "for breakfast", etc.
+4. If multiple foods are mentioned with commas or "and", treat them as separate items
+5. Provide realistic nutritional values for a typical serving size of each food
+6. If you cannot identify any food items, return an empty array
+7. Be conservative with portion estimates (assume standard serving sizes)
+8. IMPORTANT: protein, carbs, and fat should be SEPARATE values, NOT totals or sums
+9. Each macronutrient should be calculated independently for each food item
 
 Examples:
-- "lets add tuna for breakfast" → {"foodItem": "tuna", "mealType": "breakfast", "calories": 132, "protein": 28, "carbs": 0, "fat": 1}
-- "i had banana bread" → {"foodItem": "banana bread", "mealType": null, "calories": 196, "protein": 3, "carbs": 33, "fat": 6}
-- "salmon avocado" → {"foodItem": "salmon avocado", "mealType": null, "calories": 280, "protein": 25, "carbs": 8, "fat": 18}
+- "lets add tuna for breakfast" → {"foods": [{"foodItem": "tuna", "mealType": "breakfast", "calories": 132, "protein": 28, "carbs": 0, "fat": 1}]}
+- "i had banana bread and avocado on toast" → {"foods": [{"foodItem": "banana bread", "mealType": null, "calories": 196, "protein": 3, "carbs": 33, "fat": 6}, {"foodItem": "avocado on toast", "mealType": null, "calories": 250, "protein": 6, "carbs": 20, "fat": 18}]}
+- "add banana bread, avocado on toast for breakfast" → {"foods": [{"foodItem": "banana bread", "mealType": "breakfast", "calories": 196, "protein": 3, "carbs": 33, "fat": 6}, {"foodItem": "avocado on toast", "mealType": "breakfast", "calories": 250, "protein": 6, "carbs": 20, "fat": 18}]}
 
 CRITICAL: The "protein" field should ONLY contain grams of protein, NOT the sum of all macronutrients. For example, if a food has 10g protein + 15g carbs + 5g fat, the protein field should be 10, NOT 30.`
 
@@ -374,46 +412,61 @@ CRITICAL: The "protein" field should ONLY contain grams of protein, NOT the sum 
     try {
       const mealData = JSON.parse(content.trim())
       
-      // Validate the response
-      if (!mealData.foodItem) return null
+      // Validate the response - expecting array format now
+      if (!mealData.foods || !Array.isArray(mealData.foods) || mealData.foods.length === 0) {
+        console.log('No foods found in AI response')
+        return null
+      }
       
       // Debug: Log the AI response to check for issues
       console.log('AI Nutrition Response:', {
-        food: mealData.foodItem,
-        protein: mealData.protein,
-        carbs: mealData.carbs,
-        fat: mealData.fat,
-        calories: mealData.calories
+        foodCount: mealData.foods.length,
+        foods: mealData.foods.map((f: any) => ({
+          name: f.foodItem,
+          calories: f.calories,
+          protein: f.protein,
+          carbs: f.carbs,
+          fat: f.fat
+        }))
       })
       
-      // Validate nutrition values are reasonable
-      const protein = mealData.protein || 0
-      const carbs = mealData.carbs || 0
-      const fat = mealData.fat || 0
-      
-      // Check if protein value seems wrong (e.g., if it equals carbs + fat, it might be a sum)
-      if (protein > 0 && protein === (carbs + fat)) {
-        console.warn('Suspicious protein value detected - might be sum of macros:', { protein, carbs, fat })
-      }
-      
-      // Additional validation: check if protein seems unreasonably high compared to calories
-      // Protein has 4 calories per gram, so protein * 4 shouldn't exceed total calories
-      if (protein > 0 && mealData.calories > 0 && (protein * 4) > mealData.calories) {
-        console.warn('Protein value seems too high for calorie count:', { 
-          protein, 
-          calories: mealData.calories, 
-          proteinCalories: protein * 4 
-        })
-      }
-      
-      return {
-        name: mealData.foodItem,
-        type: mealData.mealType || extractMealType(userMessage),
-        calories: mealData.calories || undefined,
-        protein: mealData.protein || undefined,
-        carbs: mealData.carbs || undefined,
-        fat: mealData.fat || undefined
-      }
+      // Return array of meal objects
+      return mealData.foods.map((food: any) => {
+        // Validate nutrition values are reasonable
+        const protein = food.protein || 0
+        const carbs = food.carbs || 0
+        const fat = food.fat || 0
+        
+        // Check if protein value seems wrong (e.g., if it equals carbs + fat, it might be a sum)
+        if (protein > 0 && protein === (carbs + fat)) {
+          console.warn('Suspicious protein value detected - might be sum of macros:', { 
+            food: food.foodItem, 
+            protein, 
+            carbs, 
+            fat 
+          })
+        }
+        
+        // Additional validation: check if protein seems unreasonably high compared to calories
+        // Protein has 4 calories per gram, so protein * 4 shouldn't exceed total calories
+        if (protein > 0 && food.calories > 0 && (protein * 4) > food.calories) {
+          console.warn('Protein value seems too high for calorie count:', { 
+            food: food.foodItem,
+            protein, 
+            calories: food.calories, 
+            proteinCalories: protein * 4 
+          })
+        }
+        
+        return {
+          name: food.foodItem,
+          type: food.mealType || extractMealType(userMessage),
+          calories: food.calories || undefined,
+          protein: food.protein || undefined,
+          carbs: food.carbs || undefined,
+          fat: food.fat || undefined
+        }
+      })
     } catch (parseError) {
       console.error('Failed to parse meal data JSON:', parseError)
       console.error('Raw response:', content)
