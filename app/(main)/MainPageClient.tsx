@@ -392,7 +392,37 @@ export function MainPageClient({ user }: MainPageClientProps) {
                 className="h-8 w-8 sm:h-10 sm:w-10"
               >
                 <Settings className="h-4 w-4 sm:h-5 sm:w-5" />
-                              </Button>
+              </Button>
+              {/* Temporary debug button to clear today's meals */}
+              {process.env.NODE_ENV === 'development' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    if (confirm('Clear all of today\'s meals? This cannot be undone.')) {
+                      try {
+                        const response = await fetch('/api/debug/clear-today-meals', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' }
+                        })
+                        const result = await response.json()
+                        if (response.ok) {
+                          alert(result.message)
+                          await refreshMeals()
+                        } else {
+                          alert('Error: ' + result.error)
+                        }
+                      } catch (error) {
+                        alert('Error clearing meals: ' + error)
+                      }
+                    }
+                  }}
+                  className="h-8 text-xs px-2"
+                  title="Clear today's meals (dev only)"
+                >
+                  🗑️ Clear
+                </Button>
+              )}
                 <Button
                 variant="ghost"
                 size="icon"

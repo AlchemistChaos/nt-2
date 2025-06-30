@@ -108,9 +108,20 @@ export function useMealsForDate(userId: string, date: string) {
   return useQuery({
     queryKey: queryKeys.mealsForDate(userId, date),
     queryFn: async (): Promise<MealWithItems[]> => {
+      console.log(`[useMealsForDate] Fetching meals for user: ${userId}, date: ${date}`)
       const supabase = getSupabaseClient()
       
-      const { data: meals } = await supabase
+      // First, let's check what meals exist for this user regardless of date
+      const { data: allMeals } = await supabase
+        .from('meals')
+        .select('id, date, meal_name, meal_type, user_id')
+        .eq('user_id', userId)
+        .order('logged_at', { ascending: false })
+        .limit(10)
+      
+      console.log(`[useMealsForDate] All recent meals for user:`, allMeals)
+      
+      const { data: meals, error } = await supabase
         .from('meals')
         .select(`
           *,
@@ -120,10 +131,17 @@ export function useMealsForDate(userId: string, date: string) {
         .eq('date', date)
         .order('logged_at', { ascending: true })
 
+      if (error) {
+        console.error(`[useMealsForDate] Error fetching meals:`, error)
+        throw error
+      }
+
+      console.log(`[useMealsForDate] Query params - userId: ${userId}, date: ${date}`)
+      console.log(`[useMealsForDate] Fetched ${meals?.length || 0} meals for ${date}`, meals)
       return meals || []
     },
     enabled: !!userId && !!date,
-    staleTime: 30 * 1000, // 30 seconds (meals change frequently)
+    staleTime: 0, // Make it always fresh for testing
     gcTime: 2 * 60 * 1000, // 2 minutes
   })
 }
