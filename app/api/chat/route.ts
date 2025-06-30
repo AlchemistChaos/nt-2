@@ -469,23 +469,23 @@ Examples:
 
 async function processMealFromMessage(userMessage: string, image?: string) {
   try {
-    // First, try to extract food names and search library
-    const extractedFoods = await extractFoodNamesFromMessage(userMessage)
+    // First, try to extract foods with their meal types
+    const extractedFoods = await extractFoodsWithMealTypes(userMessage)
     
     if (extractedFoods && extractedFoods.length > 0) {
-      console.log('📝 [MEAL PROCESSING] Extracted foods:', extractedFoods)
+      console.log('📝 [MEAL PROCESSING] Extracted foods with types:', extractedFoods)
       
       const processedMeals = []
       
-      for (const foodName of extractedFoods) {
+      for (const food of extractedFoods) {
         // First try library search
-        const libraryMatch = await findLibraryMatch(foodName)
+        const libraryMatch = await findLibraryMatch(food.name)
         
         if (libraryMatch) {
-          // Use precise library data
+          // Use precise library data with extracted meal type
           processedMeals.push({
             name: libraryMatch.name,
-            type: extractMealType(userMessage),
+            type: food.type || extractMealType(userMessage),
             calories: libraryMatch.calories,
             protein: libraryMatch.protein,
             carbs: libraryMatch.carbs,
@@ -493,11 +493,12 @@ async function processMealFromMessage(userMessage: string, image?: string) {
             source: `Library (${libraryMatch.brand})`
           })
         } else {
-          // Fall back to AI estimation
-          const aiEstimate = await getAIFoodEstimate(foodName, userMessage)
+          // Fall back to AI estimation with extracted meal type
+          const aiEstimate = await getAIFoodEstimate(food.name, userMessage)
           if (aiEstimate) {
             processedMeals.push({
               ...aiEstimate,
+              type: food.type || aiEstimate.type,
               source: 'AI Estimate'
             })
           }
@@ -519,8 +520,8 @@ async function processMealFromMessage(userMessage: string, image?: string) {
   }
 }
 
-// Extract just the food names from the user message
-async function extractFoodNamesFromMessage(userMessage: string): Promise<string[]> {
+// Extract food names WITH their meal types from the user message
+async function extractFoodsWithMealTypes(userMessage: string): Promise<Array<{name: string, type?: string}>> {
   try {
     if (!process.env.OPENAI_API_KEY) {
       console.error('OpenAI API key not configured')
@@ -529,22 +530,24 @@ async function extractFoodNamesFromMessage(userMessage: string): Promise<string[
 
     const openai = getOpenAI()
     
-    const extractionPrompt = `Extract ONLY the food names from this message. Return a simple JSON array of food names.
+    const extractionPrompt = `Extract food names with their meal types from this message. Return a JSON array of objects.
 
 User message: "${userMessage}"
 
-Return format: ["food1", "food2", ...]
+Return format: [{"name": "food1", "type": "breakfast|lunch|dinner|snack"}, ...]
 
 Rules:
-1. Extract ONLY food names (e.g., "banana bread", "avocado toast")
-2. Remove phrases like "add", "had", "for breakfast"
-3. Each food should be a separate item in the array
-4. If no foods found, return empty array []
+1. Extract ONLY food names (e.g., "protein pancake", "snickers drink")
+2. Determine meal type from context around each food
+3. Remove phrases like "add", "had", "for"
+4. Each food should be a separate object with name and type
+5. If meal type not specified for a food, use null for type
+6. If no foods found, return empty array []
 
 Examples:
-- "add banana bread for breakfast" → ["banana bread"]
-- "i had banana bread and avocado toast" → ["banana bread", "avocado toast"]
-- "add banana bread, eggs for breakfast" → ["banana bread", "eggs"]`
+- "add banana bread for breakfast" → [{"name": "banana bread", "type": "breakfast"}]
+- "add protein pancake for dinner. add snickers drink for snack." → [{"name": "protein pancake", "type": "dinner"}, {"name": "snickers drink", "type": "snack"}]
+- "i had banana bread and eggs" → [{"name": "banana bread", "type": null}, {"name": "eggs", "type": null}]`
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -553,20 +556,20 @@ Examples:
         { role: 'user', content: userMessage }
       ],
       temperature: 0.1,
-      max_tokens: 100
+      max_tokens: 200
     })
 
     const content = response.choices[0]?.message?.content
     if (!content) return []
 
     try {
-      const foodNames = JSON.parse(content.trim())
-      return Array.isArray(foodNames) ? foodNames : []
+      const foodsWithTypes = JSON.parse(content.trim())
+      return Array.isArray(foodsWithTypes) ? foodsWithTypes : []
     } catch {
       return []
     }
   } catch (error) {
-    console.error('Food name extraction error:', error)
+    console.error('Food extraction error:', error)
     return []
   }
 }
