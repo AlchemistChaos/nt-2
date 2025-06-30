@@ -221,22 +221,35 @@ async function processIntentAndTakeAction(
         (lowerMessage.includes('log') && !lowerMessage.includes('preference')) ||
         (lowerMessage.includes('for') && (lowerMessage.includes('lunch') || lowerMessage.includes('breakfast') || lowerMessage.includes('dinner') || lowerMessage.includes('snack')))
     ) {
+      console.log('🍽️ [MEAL LOGGING] Intent detected for message:', userMessage)
+      
       const mealData = await processMealFromMessage(userMessage, image)
+      console.log('🍽️ [MEAL LOGGING] Meal data extracted:', mealData)
+      
       if (mealData && mealData.name) {
-        console.log('Logging meal:', mealData) // Debug log
-        console.log('Nutrition breakdown - Protein:', mealData.protein, 'Carbs:', mealData.carbs, 'Fat:', mealData.fat) // Debug nutrition
-        const meal = await addMeal(userId, {
-          meal_name: mealData.name,
-          meal_type: mealData.type || getMealTypeFromTime(),
-          kcal_total: mealData.calories,
-          g_protein: mealData.protein,
-          g_carb: mealData.carbs,
-          g_fat: mealData.fat,
-          status: 'logged'
-        })
+        console.log('🍽️ [MEAL LOGGING] Attempting to save meal:', mealData)
+        
+                 try {
+           const meal = await addMeal(userId, {
+             meal_name: mealData.name,
+             meal_type: mealData.type || getMealTypeFromTime(),
+             date: new Date().toISOString().split('T')[0], // Add required date field
+             kcal_total: mealData.calories,
+             g_protein: mealData.protein,
+             g_carb: mealData.carbs,
+             g_fat: mealData.fat,
+             status: 'logged'
+           })
 
-        console.log('Meal logged successfully:', meal) // Debug log
-        return { type: 'meal_logged', data: meal }
+          console.log('🍽️ [MEAL LOGGING] ✅ Meal saved successfully:', meal)
+          return { type: 'meal_logged', data: meal }
+        } catch (error) {
+          console.error('🍽️ [MEAL LOGGING] ❌ Failed to save meal:', error)
+          return null
+        }
+      } else {
+        console.log('🍽️ [MEAL LOGGING] ❌ No valid meal data extracted from message')
+        return null
       }
     }
 
@@ -247,6 +260,7 @@ async function processIntentAndTakeAction(
         const meal = await addMeal(userId, {
           meal_name: mealData.name,
           meal_type: mealData.type || getMealTypeFromTime(),
+          date: new Date().toISOString().split('T')[0], // Add required date field
           status: 'planned'
         })
 
