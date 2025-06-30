@@ -45,12 +45,21 @@ export function CustomMealCarousel({ meals, dailyTarget, onMealUpdated, onMealDe
 
   // Group meals by type
   const groupMealsByType = () => {
+    console.log('🍽️ [CAROUSEL] Grouping meals:', meals.map(m => ({
+      id: m.id,
+      name: m.meal_name,
+      type: m.meal_type,
+      status: m.status
+    })))
+    
     const grouped = meals.reduce((acc, meal) => {
       const mealType = meal.meal_type || 'snack'
       if (!acc[mealType]) acc[mealType] = []
       acc[mealType].push(meal)
       return acc
     }, {} as Record<string, MealWithItems[]>)
+    
+    console.log('🍽️ [CAROUSEL] Grouped meals:', grouped)
 
     // Create meal type cards for main meals
     const mainMealTypes = ['breakfast', 'lunch', 'dinner']
