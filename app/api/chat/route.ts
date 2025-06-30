@@ -8,7 +8,8 @@ import {
   addMeal,
   updateMeal,
   addUserPreference,
-  getChatMessages
+  getChatMessages,
+  searchBrandMenuItems
 } from '@/lib/supabase/database'
 import { getMealTypeFromTime } from '@/lib/utils'
 
@@ -328,9 +329,156 @@ async function processIntentAndTakeAction(
   return null
 }
 
+// Function to search for matching brand menu items
+async function searchLibraryForFood(foodName: string) {
+  try {
+    console.log('🔍 [LIBRARY SEARCH] Searching for:', foodName)
+    
+    // Search brand menu items for this food
+    const brandItems = await searchBrandMenuItems(foodName)
+    
+    if (brandItems && brandItems.length > 0) {
+      // Find the best match (exact match preferred, or first result)
+      const exactMatch = brandItems.find(item => 
+        item.name.toLowerCase() === foodName.toLowerCase()
+      )
+      const bestMatch = exactMatch || brandItems[0]
+      
+      console.log('🔍 [LIBRARY SEARCH] ✅ Found match:', {
+        name: bestMatch.name,
+        brand: bestMatch.brand?.name,
+        calories: bestMatch.kcal_per_serving,
+        protein: bestMatch.g_protein_per_serving,
+        carbs: bestMatch.g_carb_per_serving,
+        fat: bestMatch.g_fat_per_serving
+      })
+      
+      return {
+        name: bestMatch.name,
+        calories: bestMatch.kcal_per_serving || undefined,
+        protein: bestMatch.g_protein_per_serving || undefined,
+        carbs: bestMatch.g_carb_per_serving || undefined,
+        fat: bestMatch.g_fat_per_serving || undefined,
+        brand: bestMatch.brand?.name || undefined,
+        isFromLibrary: true
+      }
+    } else {
+      console.log('🔍 [LIBRARY SEARCH] ❌ No matches found for:', foodName)
+      return null
+    }
+  } catch (error) {
+    console.error('🔍 [LIBRARY SEARCH] Error searching library:', error)
+    return null
+  }
+}
+
 async function processMealFromMessage(userMessage: string, image?: string) {
   try {
-    // Check if OpenAI API key is available
+    // First, try to extract food names and search library
+    const extractedFoods = await extractFoodNamesFromMessage(userMessage)
+    
+    if (extractedFoods && extractedFoods.length > 0) {
+      console.log('📝 [MEAL PROCESSING] Extracted foods:', extractedFoods)
+      
+      const processedMeals = []
+      
+      for (const foodName of extractedFoods) {
+        // First try library search
+        const libraryMatch = await searchLibraryForFood(foodName)
+        
+        if (libraryMatch) {
+          // Use precise library data
+          processedMeals.push({
+            name: libraryMatch.name,
+            type: extractMealType(userMessage),
+            calories: libraryMatch.calories,
+            protein: libraryMatch.protein,
+            carbs: libraryMatch.carbs,
+            fat: libraryMatch.fat,
+            source: `Library (${libraryMatch.brand})`
+          })
+        } else {
+          // Fall back to AI estimation
+          const aiEstimate = await getAIFoodEstimate(foodName, userMessage)
+          if (aiEstimate) {
+            processedMeals.push({
+              ...aiEstimate,
+              source: 'AI Estimate'
+            })
+          }
+        }
+      }
+      
+      if (processedMeals.length > 0) {
+        console.log('📝 [MEAL PROCESSING] Final processed meals:', processedMeals)
+        return processedMeals
+      }
+    }
+    
+    // If no foods extracted, fall back to original AI processing
+    return await getAIFoodEstimate(userMessage, userMessage, true)
+    
+  } catch (error) {
+    console.error('Meal processing error:', error)
+    return null
+  }
+}
+
+// Extract just the food names from the user message
+async function extractFoodNamesFromMessage(userMessage: string): Promise<string[]> {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OpenAI API key not configured')
+      return []
+    }
+
+    const openai = getOpenAI()
+    
+    const extractionPrompt = `Extract ONLY the food names from this message. Return a simple JSON array of food names.
+
+User message: "${userMessage}"
+
+Return format: ["food1", "food2", ...]
+
+Rules:
+1. Extract ONLY food names (e.g., "banana bread", "avocado toast")
+2. Remove phrases like "add", "had", "for breakfast"
+3. Each food should be a separate item in the array
+4. If no foods found, return empty array []
+
+Examples:
+- "add banana bread for breakfast" → ["banana bread"]
+- "i had banana bread and avocado toast" → ["banana bread", "avocado toast"]
+- "add banana bread, eggs for breakfast" → ["banana bread", "eggs"]`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: extractionPrompt },
+        { role: 'user', content: userMessage }
+      ],
+      temperature: 0.1,
+      max_tokens: 100
+    })
+
+    const content = response.choices[0]?.message?.content
+    if (!content) return []
+
+    try {
+      const foodNames = JSON.parse(content.trim())
+      return Array.isArray(foodNames) ? foodNames : []
+    } catch {
+      return []
+    }
+  } catch (error) {
+    console.error('Food name extraction error:', error)
+    return []
+  }
+}
+
+// Get AI nutrition estimate for a food (fallback method)
+async function getAIFoodEstimate(foodName: string, originalMessage: string, isFullMessage = false) {
+  try {
     if (!process.env.OPENAI_API_KEY) {
       console.error('OpenAI API key not configured for meal processing')
       return null
@@ -338,143 +486,90 @@ async function processMealFromMessage(userMessage: string, image?: string) {
 
     const openai = getOpenAI()
     
-    // Create a specialized prompt for meal extraction and nutrition calculation
-    const mealProcessingPrompt = `You are a nutrition expert. Extract ALL food items from the user's message and provide detailed nutritional information for each.
+    // Different prompt based on whether we're processing a single food or full message
+    const prompt = isFullMessage 
+      ? `You are a nutrition expert. Extract ALL food items from the user's message and provide detailed nutritional information for each.
 
-User message: "${userMessage}"
+User message: "${originalMessage}"
 
 Please respond with ONLY a JSON object in this exact format:
 {
   "foods": [
     {
-      "foodItem": "extracted food name (e.g., 'banana bread', 'avocado on toast')",
+      "foodItem": "extracted food name",
       "mealType": "breakfast|lunch|dinner|snack or null if not specified",
-      "calories": number (estimated calories for a typical serving),
-      "protein": number (grams of protein),
-      "carbs": number (grams of carbohydrates),
-      "fat": number (grams of fat)
+      "calories": number,
+      "protein": number,
+      "carbs": number,
+      "fat": number
     }
   ]
+}`
+      : `You are a nutrition expert. Provide nutritional information for this specific food item.
+
+Food: "${foodName}"
+
+Please respond with ONLY a JSON object in this exact format:
+{
+  "foodItem": "${foodName}",
+  "calories": number (estimated calories for a typical serving),
+  "protein": number (grams of protein),
+  "carbs": number (grams of carbohydrates),
+  "fat": number (grams of fat)
 }
 
-Rules:
-1. Extract ALL separate food items mentioned in the message
-2. Each food item should be a separate object in the "foods" array
-3. Remove phrases like "lets add", "i had", "for breakfast", etc.
-4. If multiple foods are mentioned with commas or "and", treat them as separate items
-5. Provide realistic nutritional values for a typical serving size of each food
-6. If you cannot identify any food items, return an empty array
-7. Be conservative with portion estimates (assume standard serving sizes)
-8. IMPORTANT: protein, carbs, and fat should be SEPARATE values, NOT totals or sums
-9. Each macronutrient should be calculated independently for each food item
-
-Examples:
-- "lets add tuna for breakfast" → {"foods": [{"foodItem": "tuna", "mealType": "breakfast", "calories": 132, "protein": 28, "carbs": 0, "fat": 1}]}
-- "i had banana bread and avocado on toast" → {"foods": [{"foodItem": "banana bread", "mealType": null, "calories": 196, "protein": 3, "carbs": 33, "fat": 6}, {"foodItem": "avocado on toast", "mealType": null, "calories": 250, "protein": 6, "carbs": 20, "fat": 18}]}
-- "add banana bread, avocado on toast for breakfast" → {"foods": [{"foodItem": "banana bread", "mealType": "breakfast", "calories": 196, "protein": 3, "carbs": 33, "fat": 6}, {"foodItem": "avocado on toast", "mealType": "breakfast", "calories": 250, "protein": 6, "carbs": 20, "fat": 18}]}
-
-CRITICAL: The "protein" field should ONLY contain grams of protein, NOT the sum of all macronutrients. For example, if a food has 10g protein + 15g carbs + 5g fat, the protein field should be 10, NOT 30.`
-
-    const messages: any[] = [
-      {
-        role: 'system',
-        content: mealProcessingPrompt
-      }
-    ]
-
-    // Add user message with or without image
-    if (image) {
-      messages.push({
-        role: 'user',
-        content: [
-          { type: 'text', text: userMessage },
-          { type: 'image_url', image_url: { url: image } }
-        ]
-      })
-    } else {
-      messages.push({
-        role: 'user',
-        content: userMessage
-      })
-    }
+Use realistic nutritional values for a typical serving size.`
 
     const response = await openai.chat.completions.create({
-      model: image ? 'gpt-4o' : 'gpt-4o-mini',
-      messages,
-      temperature: 0.1, // Low temperature for consistent extraction
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: prompt },
+        { role: 'user', content: isFullMessage ? originalMessage : foodName }
+      ],
+      temperature: 0.1,
       max_tokens: 200
     })
 
     const content = response.choices[0]?.message?.content
     if (!content) return null
 
-    // Parse the JSON response
     try {
-      const mealData = JSON.parse(content.trim())
+      const data = JSON.parse(content.trim())
       
-      // Validate the response - expecting array format now
-      if (!mealData.foods || !Array.isArray(mealData.foods) || mealData.foods.length === 0) {
-        console.log('No foods found in AI response')
-        return null
-      }
-      
-      // Debug: Log the AI response to check for issues
-      console.log('AI Nutrition Response:', {
-        foodCount: mealData.foods.length,
-        foods: mealData.foods.map((f: any) => ({
-          name: f.foodItem,
-          calories: f.calories,
-          protein: f.protein,
-          carbs: f.carbs,
-          fat: f.fat
-        }))
-      })
-      
-      // Return array of meal objects
-      return mealData.foods.map((food: any) => {
-        // Validate nutrition values are reasonable
-        const protein = food.protein || 0
-        const carbs = food.carbs || 0
-        const fat = food.fat || 0
-        
-        // Check if protein value seems wrong (e.g., if it equals carbs + fat, it might be a sum)
-        if (protein > 0 && protein === (carbs + fat)) {
-          console.warn('Suspicious protein value detected - might be sum of macros:', { 
-            food: food.foodItem, 
-            protein, 
-            carbs, 
-            fat 
-          })
+      if (isFullMessage) {
+        // Handle full message format
+        if (!data.foods || !Array.isArray(data.foods) || data.foods.length === 0) {
+          return null
         }
         
-        // Additional validation: check if protein seems unreasonably high compared to calories
-        // Protein has 4 calories per gram, so protein * 4 shouldn't exceed total calories
-        if (protein > 0 && food.calories > 0 && (protein * 4) > food.calories) {
-          console.warn('Protein value seems too high for calorie count:', { 
-            food: food.foodItem,
-            protein, 
-            calories: food.calories, 
-            proteinCalories: protein * 4 
-          })
-        }
-        
-        return {
+        return data.foods.map((food: any) => ({
           name: food.foodItem,
-          type: food.mealType || extractMealType(userMessage),
+          type: food.mealType || extractMealType(originalMessage),
           calories: food.calories || undefined,
           protein: food.protein || undefined,
           carbs: food.carbs || undefined,
           fat: food.fat || undefined
+        }))
+      } else {
+        // Handle single food format
+        if (!data.foodItem) return null
+        
+        return {
+          name: data.foodItem,
+          type: extractMealType(originalMessage),
+          calories: data.calories || undefined,
+          protein: data.protein || undefined,
+          carbs: data.carbs || undefined,
+          fat: data.fat || undefined
         }
-      })
+      }
     } catch (parseError) {
-      console.error('Failed to parse meal data JSON:', parseError)
-      console.error('Raw response:', content)
+      console.error('Failed to parse AI food estimate:', parseError)
       return null
     }
 
   } catch (error) {
-    console.error('Meal processing error:', error)
+    console.error('AI food estimation error:', error)
     return null
   }
 }
