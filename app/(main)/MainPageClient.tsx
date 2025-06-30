@@ -78,32 +78,26 @@ export function MainPageClient({ user }: MainPageClientProps) {
   // Track if we should auto-scroll (only for new messages, not when loading)
   const [shouldAutoScroll, setShouldAutoScroll] = useState(false)
 
-  // Sync local state with cached messages when date changes
-  // Only sync when date actually changes to prevent infinite loops
+  // Simple message sync - only sync when date changes to prevent infinite loops
   const prevSelectedDate = useRef<string>(selectedDate)
+  
   useEffect(() => {
+    // Only sync when date actually changes
     if (selectedDate !== prevSelectedDate.current) {
-      console.log('Date changed, loading messages for:', selectedDate)
-      // Clear messages immediately when date changes to avoid showing old messages
-      setMessages([])
-      // Then set the new messages for the selected date
+      console.log('Date changed - syncing messages for:', selectedDate)
       setMessages(cachedMessages)
       prevSelectedDate.current = selectedDate
-      // Don't auto-scroll when switching dates
-      setShouldAutoScroll(false)
+      setShouldAutoScroll(false) // Don't auto-scroll when switching dates
     }
-  }, [selectedDate, cachedMessages])
-
-  // Sync cached messages with local state (handle both initial load and updates)
+  }, [selectedDate]) // Only depend on selectedDate to prevent loops
+  
+  // Initialize messages on first load if empty
   useEffect(() => {
-    // Only update if we don't have any messages locally, or if messages are loading
-    if ((messages.length === 0 && cachedMessages.length > 0) || (!messagesLoading && cachedMessages.length > 0 && messages.length === 0)) {
-      console.log('Syncing cached messages to local state:', cachedMessages.length)
+    if (messages.length === 0 && cachedMessages.length > 0) {
+      console.log('Initializing messages from cache')
       setMessages(cachedMessages)
-      // Don't auto-scroll when loading cached messages
-      setShouldAutoScroll(false)
     }
-  }, [cachedMessages, messagesLoading]) // React to both cached messages and loading state changes
+  }, [cachedMessages.length]) // Only depend on length to avoid infinite loops
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -119,11 +113,15 @@ export function MainPageClient({ user }: MainPageClientProps) {
 
   const refreshMeals = async () => {
     console.log('Refreshing meals for date:', selectedDate)
-    // Use React Query to invalidate and refetch meals data for selected date
-    await queryClient.invalidateQueries({ queryKey: queryKeys.mealsForDate(user.id, selectedDate) })
-    // Also force a refetch to ensure data is up to date
-    await queryClient.refetchQueries({ queryKey: queryKeys.mealsForDate(user.id, selectedDate) })
-    console.log('Meals refreshed')
+    const queryKey = queryKeys.mealsForDate(user.id, selectedDate)
+    console.log('Query key for refresh:', queryKey)
+    
+    // Remove the query entirely and force a fresh fetch
+    queryClient.removeQueries({ queryKey })
+    await queryClient.invalidateQueries({ queryKey })
+    await queryClient.refetchQueries({ queryKey })
+    
+    console.log('Meals refreshed - forced complete refresh')
   }
 
   const refreshMessages = async () => {
@@ -289,7 +287,7 @@ export function MainPageClient({ user }: MainPageClientProps) {
                       } catch (error) {
                         console.error('Error refreshing meals:', error)
                       }
-                    }, 500) // 500ms delay
+                    }, 100) // 100ms delay should be enough
                   }
                 }
               } catch {
