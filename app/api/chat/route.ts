@@ -11,6 +11,7 @@ import {
   getChatMessages,
   searchBrandMenuItems
 } from '@/lib/supabase/database'
+import { createClient } from '@/lib/supabase/server'
 import { getMealTypeFromTime } from '@/lib/utils'
 
 export async function POST(request: NextRequest) {
@@ -329,45 +330,139 @@ async function processIntentAndTakeAction(
   return null
 }
 
-// Function to search for matching brand menu items
-async function searchLibraryForFood(foodName: string) {
+// Get all brand menu items from library
+async function getAllLibraryItems() {
   try {
-    console.log('🔍 [LIBRARY SEARCH] Searching for:', foodName)
+    const supabase = await createClient()
+    const { data: items } = await supabase
+      .from('brand_menu_items')
+      .select(`
+        *,
+        brand:brands(*)
+      `)
+      .eq('is_available', true)
+      .order('name')
     
-    // Search brand menu items for this food
-    const brandItems = await searchBrandMenuItems(foodName)
+    return items || []
+  } catch (error) {
+    console.error('Error fetching library items:', error)
+    return []
+  }
+}
+
+// Use AI to intelligently match food against library items
+async function findLibraryMatch(foodName: string) {
+  try {
+    console.log('🔍 [AI LIBRARY SEARCH] Searching for:', foodName)
     
-    if (brandItems && brandItems.length > 0) {
-      // Find the best match (exact match preferred, or first result)
-      const exactMatch = brandItems.find(item => 
-        item.name.toLowerCase() === foodName.toLowerCase()
-      )
-      const bestMatch = exactMatch || brandItems[0]
-      
-      console.log('🔍 [LIBRARY SEARCH] ✅ Found match:', {
-        name: bestMatch.name,
-        brand: bestMatch.brand?.name,
-        calories: bestMatch.kcal_per_serving,
-        protein: bestMatch.g_protein_per_serving,
-        carbs: bestMatch.g_carb_per_serving,
-        fat: bestMatch.g_fat_per_serving
-      })
-      
-      return {
-        name: bestMatch.name,
-        calories: bestMatch.kcal_per_serving || undefined,
-        protein: bestMatch.g_protein_per_serving || undefined,
-        carbs: bestMatch.g_carb_per_serving || undefined,
-        fat: bestMatch.g_fat_per_serving || undefined,
-        brand: bestMatch.brand?.name || undefined,
-        isFromLibrary: true
-      }
-    } else {
-      console.log('🔍 [LIBRARY SEARCH] ❌ No matches found for:', foodName)
+    // Get all available library items
+    const libraryItems = await getAllLibraryItems()
+    
+    if (libraryItems.length === 0) {
+      console.log('🔍 [AI LIBRARY SEARCH] No library items available')
       return null
     }
+    
+    // Create a simplified list for AI matching
+    const itemList = libraryItems.map((item: any, index: number) => ({
+      id: index,
+      name: item.name,
+      brand: item.brand?.name || 'Unknown',
+      description: item.description || '',
+      category: item.category || ''
+    }))
+    
+    console.log(`🔍 [AI LIBRARY SEARCH] Checking against ${itemList.length} library items`)
+    
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OpenAI API key not available for library matching')
+      return null
+    }
+
+    const openai = getOpenAI()
+    
+    const matchingPrompt = `You are a food matching expert. Find the best match for the requested food item from the available library.
+
+Requested food: "${foodName}"
+
+Available library items:
+${itemList.map((item: any) => `${item.id}: ${item.name} (${item.brand}) ${item.description ? `- ${item.description}` : ''}`).join('\n')}
+
+Please respond with ONLY a JSON object:
+{
+  "match": {
+    "id": number (library item ID, or null if no good match),
+    "confidence": "high|medium|low",
+    "reason": "brief explanation of why this matches"
+  }
+}
+
+Rules:
+1. Look for semantic matches, not just exact text matches
+2. Consider variations like "banana bread" matching "Banana Bread Slice" 
+3. Consider brand context - Warehouse items are commonly used
+4. Only return a match if you're reasonably confident (medium+ confidence)
+5. If no good match exists, return id: null
+
+Examples:
+- "banana bread" could match "Banana Bread Slice" or "Banana Bread"
+- "eggs" could match "Scrambled Eggs" or "Hard Boiled Eggs"  
+- "avocado toast" could match "Avocado Toast" or "Avocado on Toast"`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: matchingPrompt },
+        { role: 'user', content: foodName }
+      ],
+      temperature: 0.1,
+      max_tokens: 200
+    })
+
+    const content = response.choices[0]?.message?.content
+    if (!content) return null
+
+    try {
+      const result = JSON.parse(content.trim())
+      
+      if (result.match && result.match.id !== null && result.match.confidence !== 'low') {
+        const matchedItem = libraryItems[result.match.id]
+        
+        if (matchedItem) {
+          console.log('🔍 [AI LIBRARY SEARCH] ✅ Found match:', {
+            requested: foodName,
+            matched: matchedItem.name,
+            brand: matchedItem.brand?.name,
+            confidence: result.match.confidence,
+            reason: result.match.reason,
+            calories: matchedItem.kcal_per_serving,
+            protein: matchedItem.g_protein_per_serving
+          })
+          
+          return {
+            name: matchedItem.name,
+            calories: matchedItem.kcal_per_serving || undefined,
+            protein: matchedItem.g_protein_per_serving || undefined,
+            carbs: matchedItem.g_carb_per_serving || undefined,
+            fat: matchedItem.g_fat_per_serving || undefined,
+            brand: matchedItem.brand?.name || undefined,
+            confidence: result.match.confidence,
+            reason: result.match.reason,
+            isFromLibrary: true
+          }
+        }
+      }
+      
+      console.log('🔍 [AI LIBRARY SEARCH] ❌ No confident match found for:', foodName)
+      return null
+      
+    } catch (parseError) {
+      console.error('Failed to parse library matching result:', parseError)
+      return null
+    }
+
   } catch (error) {
-    console.error('🔍 [LIBRARY SEARCH] Error searching library:', error)
+    console.error('🔍 [AI LIBRARY SEARCH] Error:', error)
     return null
   }
 }
@@ -384,7 +479,7 @@ async function processMealFromMessage(userMessage: string, image?: string) {
       
       for (const foodName of extractedFoods) {
         // First try library search
-        const libraryMatch = await searchLibraryForFood(foodName)
+        const libraryMatch = await findLibraryMatch(foodName)
         
         if (libraryMatch) {
           // Use precise library data
