@@ -31,13 +31,6 @@ export function CarouselCard({
   // Use meals array or fallback to single meal
   const mealsList = meals || (meal ? [meal] : [])
   const hasMeals = mealsList.length > 0
-  
-  // Debug logging
-  if (mealType && mealsList.length > 0) {
-    console.log(`🃏 [CARD ${mealType}] Received ${mealsList.length} meals:`, 
-      mealsList.map(m => ({ name: m.meal_name, id: m.id, status: m.status }))
-    )
-  }
 
   // Aggregate nutrition data from all meals of this type
   const aggregatedData = mealsList.reduce(

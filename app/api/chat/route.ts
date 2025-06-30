@@ -223,13 +223,9 @@ async function processIntentAndTakeAction(
         (lowerMessage.includes('log') && !lowerMessage.includes('preference')) ||
         (lowerMessage.includes('for') && (lowerMessage.includes('lunch') || lowerMessage.includes('breakfast') || lowerMessage.includes('dinner') || lowerMessage.includes('snack')))
     ) {
-            console.log('🍽️ [MEAL LOGGING] Intent detected for message:', userMessage)
-      
-      const mealsData = await processMealFromMessage(userMessage, image)
-      console.log('🍽️ [MEAL LOGGING] Meal data extracted:', mealsData)
+            const mealsData = await processMealFromMessage(userMessage, image)
       
       if (mealsData && Array.isArray(mealsData) && mealsData.length > 0) {
-        console.log('🍽️ [MEAL LOGGING] Attempting to save', mealsData.length, 'meals')
         
         try {
           const savedMeals = []
@@ -247,8 +243,6 @@ async function processIntentAndTakeAction(
                 g_fat: mealData.fat,
                 status: 'logged'
               })
-              
-              console.log('🍽️ [MEAL LOGGING] ✅ Meal saved successfully:', meal)
               savedMeals.push(meal)
             }
           }
@@ -260,15 +254,13 @@ async function processIntentAndTakeAction(
               count: savedMeals.length
             }
           } else {
-            console.log('🍽️ [MEAL LOGGING] ❌ No valid meals found to save')
             return null
           }
         } catch (error) {
-          console.error('🍽️ [MEAL LOGGING] ❌ Failed to save meals:', error)
+          console.error('Failed to save meals:', error)
           return null
         }
       } else {
-        console.log('🍽️ [MEAL LOGGING] ❌ No valid meal data extracted from message')
         return null
       }
     }
@@ -353,13 +345,10 @@ async function getAllLibraryItems() {
 // Use AI to intelligently match food against library items
 async function findLibraryMatch(foodName: string) {
   try {
-    console.log('🔍 [AI LIBRARY SEARCH] Searching for:', foodName)
-    
     // Get all available library items
     const libraryItems = await getAllLibraryItems()
     
     if (libraryItems.length === 0) {
-      console.log('🔍 [AI LIBRARY SEARCH] No library items available')
       return null
     }
     
@@ -371,8 +360,6 @@ async function findLibraryMatch(foodName: string) {
       description: item.description || '',
       category: item.category || ''
     }))
-    
-    console.log(`🔍 [AI LIBRARY SEARCH] Checking against ${itemList.length} library items`)
     
     if (!process.env.OPENAI_API_KEY) {
       console.error('OpenAI API key not available for library matching')
@@ -429,16 +416,6 @@ Examples:
         const matchedItem = libraryItems[result.match.id]
         
         if (matchedItem) {
-          console.log('🔍 [AI LIBRARY SEARCH] ✅ Found match:', {
-            requested: foodName,
-            matched: matchedItem.name,
-            brand: matchedItem.brand?.name,
-            confidence: result.match.confidence,
-            reason: result.match.reason,
-            calories: matchedItem.kcal_per_serving,
-            protein: matchedItem.g_protein_per_serving
-          })
-          
           return {
             name: matchedItem.name,
             calories: matchedItem.kcal_per_serving || undefined,
@@ -453,7 +430,6 @@ Examples:
         }
       }
       
-      console.log('🔍 [AI LIBRARY SEARCH] ❌ No confident match found for:', foodName)
       return null
       
     } catch (parseError) {
@@ -462,7 +438,7 @@ Examples:
     }
 
   } catch (error) {
-    console.error('🔍 [AI LIBRARY SEARCH] Error:', error)
+    console.error('Library search error:', error)
     return null
   }
 }
@@ -473,8 +449,6 @@ async function processMealFromMessage(userMessage: string, image?: string) {
     const extractedFoods = await extractFoodsWithMealTypes(userMessage)
     
     if (extractedFoods && extractedFoods.length > 0) {
-      console.log('📝 [MEAL PROCESSING] Extracted foods with types:', extractedFoods)
-      
       const processedMeals = []
       
       for (const food of extractedFoods) {
@@ -506,7 +480,6 @@ async function processMealFromMessage(userMessage: string, image?: string) {
       }
       
       if (processedMeals.length > 0) {
-        console.log('📝 [MEAL PROCESSING] Final processed meals:', processedMeals)
         return processedMeals
       }
     }

@@ -33,14 +33,7 @@ export function MainPageClient({ user }: MainPageClientProps) {
   const { data: cachedMessages = [], isLoading: messagesLoading } = useChatMessages(user.id, selectedDate, 20)
   const { data: dailyTarget } = useDailyTargetForDate(user.id, selectedDate)
   
-  // Debug meals data
-  console.log('Meals debug:', {
-    mealsCount: meals.length,
-    mealsLoading,
-    mealsError,
-    selectedDate,
-    userId: user.id
-  })
+
   const queryClient = useQueryClient()
   
   // Use local state for real-time updates, but sync with cached messages
@@ -82,22 +75,20 @@ export function MainPageClient({ user }: MainPageClientProps) {
   const prevSelectedDate = useRef<string>(selectedDate)
   
   useEffect(() => {
-    // Only sync when date actually changes
-    if (selectedDate !== prevSelectedDate.current) {
-      console.log('Date changed - syncing messages for:', selectedDate)
-      setMessages(cachedMessages)
-      prevSelectedDate.current = selectedDate
-      setShouldAutoScroll(false) // Don't auto-scroll when switching dates
-    }
-  }, [selectedDate]) // Only depend on selectedDate to prevent loops
-  
-  // Initialize messages on first load if empty
-  useEffect(() => {
-    if (messages.length === 0 && cachedMessages.length > 0) {
-      console.log('Initializing messages from cache')
-      setMessages(cachedMessages)
-    }
-  }, [cachedMessages.length]) // Only depend on length to avoid infinite loops
+      // Only sync when date actually changes
+  if (selectedDate !== prevSelectedDate.current) {
+    setMessages(cachedMessages)
+    prevSelectedDate.current = selectedDate
+    setShouldAutoScroll(false) // Don't auto-scroll when switching dates
+  }
+}, [selectedDate]) // Only depend on selectedDate to prevent loops
+
+// Initialize messages on first load if empty
+useEffect(() => {
+  if (messages.length === 0 && cachedMessages.length > 0) {
+    setMessages(cachedMessages)
+  }
+}, [cachedMessages.length]) // Only depend on length to avoid infinite loops
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -112,16 +103,12 @@ export function MainPageClient({ user }: MainPageClientProps) {
   }, [messages, shouldAutoScroll])
 
   const refreshMeals = async () => {
-    console.log('Refreshing meals for date:', selectedDate)
     const queryKey = queryKeys.mealsForDate(user.id, selectedDate)
-    console.log('Query key for refresh:', queryKey)
     
     // Remove the query entirely and force a fresh fetch
     queryClient.removeQueries({ queryKey })
     await queryClient.invalidateQueries({ queryKey })
     await queryClient.refetchQueries({ queryKey })
-    
-    console.log('Meals refreshed - forced complete refresh')
   }
 
   const refreshMessages = async () => {
@@ -277,7 +264,6 @@ export function MainPageClient({ user }: MainPageClientProps) {
 
                 if (parsed.action) {
                   // Handle actions (meal logged, preference updated, etc.)
-                  console.log('Action received:', parsed.action)
                   // Refresh meals if needed
                   if (parsed.action.type === 'meal_logged' || parsed.action.type === 'meal_planned' || parsed.action.type === 'meal_updated') {
                     // Add a small delay to ensure database write is complete
