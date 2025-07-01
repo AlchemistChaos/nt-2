@@ -127,8 +127,8 @@ export function useMealsForDate(userId: string, date: string) {
         throw error
       }
 
-      console.log(`📊 useMealsForDate fetched ${meals?.length || 0} meals at ${timestamp}:`, 
-        meals?.map(m => ({ id: m.id, name: m.meal_name, type: m.meal_type })) || []
+      console.log(`📊 useMealsForDate fetched ${meals?.length || 0} meals:`, 
+        meals?.map((m: any) => ({ id: m.id, name: m.meal_name, type: m.meal_type })) || []
       )
       return meals || []
     },
