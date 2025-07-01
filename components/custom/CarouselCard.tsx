@@ -50,12 +50,14 @@ export function CarouselCard({
     
     if (confirm('Are you sure you want to delete this meal?')) {
       try {
+        console.log('🗑️ User confirmed deletion, starting optimistic update...')
         await deleteMealMutation.mutateAsync({
           mealId: mealToDelete.id,
           userId: user.id,
           date: mealToDelete.date
         })
-          onMealDeleted?.()
+        console.log('✅ Deletion completed successfully')
+        // No need to call onMealDeleted - React Query handles the UI update
       } catch (error) {
         console.error('Error deleting meal:', error)
         alert('Failed to delete meal. Please try again.')

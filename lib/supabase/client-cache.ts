@@ -133,8 +133,8 @@ export function useMealsForDate(userId: string, date: string) {
       return meals || []
     },
     enabled: !!userId && !!date,
-    staleTime: 0, // Force fresh data every time - we'll manage caching ourselves
-    gcTime: 1 * 60 * 1000, // 1 minute
+    staleTime: 30 * 1000, // 30 seconds - allows optimistic updates to work
+    gcTime: 5 * 60 * 1000, // 5 minutes
   })
 }
 
@@ -345,6 +345,7 @@ export function useDeleteMeal() {
       userId: string
       date: string
     }) => {
+      console.log('🗑️ Deleting meal:', { mealId, userId, date })
       const supabase = getSupabaseClient()
       const { error } = await supabase
         .from('meals')
@@ -356,18 +357,40 @@ export function useDeleteMeal() {
         throw error
       }
 
+      console.log('✅ Meal deleted successfully from database')
       return true
     },
-    onSuccess: (_data, variables) => {
-      // Invalidate queries for the specific date and user
-      queryClient.invalidateQueries({ queryKey: queryKeys.mealsForDate(variables.userId, variables.date) })
-      queryClient.invalidateQueries({ queryKey: queryKeys.todaysMeals(variables.userId) })
+    onMutate: async ({ mealId, userId, date }) => {
+      // Cancel any outgoing refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({ queryKey: queryKeys.mealsForDate(userId, date) })
       
-      // Also invalidate user days in case this was the last meal for a day
-      queryClient.invalidateQueries({ queryKey: queryKeys.userDays(variables.userId) })
+      // Snapshot the previous value
+      const previousMeals = queryClient.getQueryData(queryKeys.mealsForDate(userId, date))
+      
+      // Optimistically update to remove the meal
+      queryClient.setQueryData(
+        queryKeys.mealsForDate(userId, date),
+        (old: MealWithItems[] = []) => old.filter(meal => meal.id !== mealId)
+      )
+      
+      console.log('🔄 Optimistically removed meal from UI')
+      
+      // Return a context object with the snapshotted value
+      return { previousMeals }
     },
-    onError: (error) => {
-      console.error('useDeleteMeal onError called:', error)
+    onError: (_err, { userId, date }, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      queryClient.setQueryData(queryKeys.mealsForDate(userId, date), context?.previousMeals)
+      console.error('❌ Meal deletion failed, rolled back UI changes')
+    },
+    onSettled: (_data, _error, variables) => {
+      // Delay the final refresh to allow optimistic update to be visible
+      setTimeout(() => {
+        console.log('🔄 Refreshing meal data after deletion (delayed)')
+        queryClient.invalidateQueries({ queryKey: queryKeys.mealsForDate(variables.userId, variables.date) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.todaysMeals(variables.userId) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.userDays(variables.userId) })
+      }, 500)
     }
   })
 }

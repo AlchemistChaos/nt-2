@@ -30,6 +30,12 @@ export function MainPageClient({ user }: MainPageClientProps) {
   
   // Use React Query for date-aware data fetching
   const { data: meals = [], isLoading: mealsLoading, error: mealsError } = useMealsForDate(user.id, selectedDate)
+  
+  // Debug UI query key
+  console.log(`🔍 UI Query Key:`, queryKeys.mealsForDate(user.id, selectedDate))
+  console.log(`📊 UI Meals Data:`, meals)
+  console.log(`👤 User ID:`, user.id)
+  console.log(`📅 Selected Date:`, selectedDate)
   const { data: cachedMessages = [], isLoading: messagesLoading } = useChatMessages(user.id, selectedDate, 20)
   const { data: dailyTarget } = useDailyTargetForDate(user.id, selectedDate)
   
@@ -336,21 +342,62 @@ useEffect(() => {
                     case 'meal_planned':
                     case 'meal_updated':
                       console.log('🔄 TRIGGERING MEAL REFRESH for action:', parsed.action.type)
+                      console.log('📊 Action data received:', parsed.action.data)
                       
-                      // Multiple refresh attempts with different delays
-                      const refreshAttempts = [200, 500, 1000, 2000] // ms delays
+                      // Optimistically add meals to cache immediately
+                      const actionData = parsed.action.data
+                      const mealsToAdd = Array.isArray(actionData) ? actionData : [actionData]
                       
-                      refreshAttempts.forEach((delay, index) => {
-                        setTimeout(async () => {
-                          try {
-                            console.log(`🔄 Meal refresh attempt ${index + 1}/${refreshAttempts.length} (${delay}ms delay)`)
-                            await refreshMeals()
-                            console.log(`✅ Meal refresh attempt ${index + 1} completed successfully`)
-                          } catch (error) {
-                            console.error(`❌ Meal refresh attempt ${index + 1} failed:`, error)
-                          }
-                        }, delay)
+                      console.log('🚀 Adding meals optimistically to cache:', mealsToAdd.length, 'meals')
+                      
+                      // Add each meal to the React Query cache optimistically
+                      mealsToAdd.forEach((meal: any) => {
+                        if (meal && meal.id) {
+                          console.log(`➕ Adding meal optimistically: ${meal.meal_name} (${meal.meal_type})`)
+                          console.log(`🗓️ Meal date: ${meal.date}, Selected date: ${selectedDate}`)
+                          const cacheUpdateKey = queryKeys.mealsForDate(user.id, selectedDate)
+                          const uiQueryKey = queryKeys.mealsForDate(user.id, selectedDate)
+                          console.log(`🔑 Cache update key:`, cacheUpdateKey)
+                          console.log(`🔑 UI query key:`, uiQueryKey)
+                          console.log(`🔑 Keys match:`, JSON.stringify(cacheUpdateKey) === JSON.stringify(uiQueryKey))
+                          
+                          // Check current cache state
+                          const currentCacheData = queryClient.getQueryData(queryKeys.mealsForDate(user.id, selectedDate))
+                          console.log(`📦 Current cache data:`, currentCacheData)
+                          
+                          queryClient.setQueryData(
+                            queryKeys.mealsForDate(user.id, selectedDate),
+                            (old: any[] = []) => {
+                              console.log(`📊 Old cache data:`, old)
+                              // Check if meal already exists to avoid duplicates
+                              const exists = old.some(existingMeal => existingMeal.id === meal.id)
+                              if (exists) {
+                                console.log(`⚠️ Meal ${meal.id} already exists, skipping duplicate`)
+                                return old
+                              }
+                              const newData = [...old, meal]
+                              console.log(`✅ Added meal ${meal.meal_name} to cache, new data:`, newData)
+                              return newData
+                            }
+                          )
+                          
+                          // Verify the update worked
+                          const updatedCacheData = queryClient.getQueryData(queryKeys.mealsForDate(user.id, selectedDate))
+                          console.log(`🔍 Updated cache data:`, updatedCacheData)
+                          console.log(`✅ Optimistic update completed without invalidation`)
+                        }
                       })
+                      
+                      // Also do a single refresh to ensure data consistency (delayed to avoid conflicts)
+                      setTimeout(async () => {
+                        try {
+                          console.log('🔄 Final data consistency refresh (after optimistic updates)')
+                          await refreshMeals()
+                          console.log('✅ Final refresh completed')
+                        } catch (error) {
+                          console.error('❌ Final refresh failed:', error)
+                        }
+                      }, 2000)
                       break
                       
                     case 'preference_updated':

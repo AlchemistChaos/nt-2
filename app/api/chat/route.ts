@@ -161,29 +161,42 @@ ${recentMessages.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n')}`
           }
 
           // Process the full response for intent recognition
+          let action = null
           try {
-            const action = await processIntentAndTakeAction(fullResponse, message, image, user.id)
-            
-            // Send action if any - with confirmation that it worked
-            if (action) {
-              console.log('✅ Action processed successfully, sending to client:', action)
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ action })}\n\n`))
-            } else {
-              console.log('🔍 No action was processed from the response')
-            }
+            action = await processIntentAndTakeAction(fullResponse, message, image, user.id)
+            console.log('🎯 Intent processing completed, action result:', action ? 'SUCCESS' : 'NO_ACTION')
           } catch (actionError) {
             console.error('❌ Error processing intent/action:', actionError)
-            // Send error action to client so it knows something failed
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-              action: { type: 'error', error: 'Failed to process action' } 
-            })}\n\n`))
+            action = { type: 'error', error: 'Failed to process action' }
+          }
+
+          // Send action if any - ensuring controller is still open
+          try {
+            if (action) {
+              console.log('✅ Sending action to client:', action)
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ action })}\n\n`))
+            } else {
+              console.log('🔍 No action to send to client')
+            }
+          } catch (sendError) {
+            console.error('❌ Failed to send action to client:', sendError)
           }
 
           // Save assistant message
-          await addChatMessage(user.id, 'assistant', fullResponse)
+          try {
+            await addChatMessage(user.id, 'assistant', fullResponse)
+          } catch (saveError) {
+            console.error('❌ Failed to save assistant message:', saveError)
+          }
 
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-          controller.close()
+          // Close the stream
+          try {
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+            controller.close()
+            console.log('🏁 Stream closed successfully')
+          } catch (closeError) {
+            console.error('❌ Error closing stream:', closeError)
+          }
         } catch (error) {
           console.error('Streaming error:', error)
           controller.error(error)
@@ -290,7 +303,17 @@ async function processIntentAndTakeAction(
                   meal_name: mealData.name,
                   meal_type: mealData.type || getMealTypeFromTime(),
                   portion_size: validatePortionSize(mealData.portionSize),
-                  date: new Date().toISOString().split('T')[0],
+                  date: (() => {
+                    // Use client's timezone by getting date from current moment
+                    const now = new Date()
+                    // Ensure we're using local date, not UTC
+                    const year = now.getFullYear()
+                    const month = String(now.getMonth() + 1).padStart(2, '0')
+                    const day = String(now.getDate()).padStart(2, '0')
+                    const localDate = `${year}-${month}-${day}`
+                    console.log('📅 Using local date for meal:', localDate, 'from:', now.toString())
+                    return localDate
+                  })(),
                   kcal_total: mealData.calories,
                   g_protein: mealData.protein,
                   g_carb: mealData.carbs,
@@ -342,7 +365,17 @@ async function processIntentAndTakeAction(
               meal_name: mealData.name,
               meal_type: mealData.type || getMealTypeFromTime(),
               portion_size: validatePortionSize(mealData.portionSize),
-              date: new Date().toISOString().split('T')[0],
+              date: (() => {
+                // Use client's timezone by getting date from current moment
+                const now = new Date()
+                // Ensure we're using local date, not UTC
+                const year = now.getFullYear()
+                const month = String(now.getMonth() + 1).padStart(2, '0')
+                const day = String(now.getDate()).padStart(2, '0')
+                const localDate = `${year}-${month}-${day}`
+                console.log('📅 Using local date for planned meal:', localDate, 'from:', now.toString())
+                return localDate
+              })(),
               status: 'planned' as const
             })
             savedMeals.push(meal)
