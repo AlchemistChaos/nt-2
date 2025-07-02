@@ -285,9 +285,16 @@ async function processIntentAndTakeAction(
         (lowerMessage.includes('log') && !lowerMessage.includes('preference')) ||
         (lowerMessage.includes('for') && (lowerMessage.includes('lunch') || lowerMessage.includes('breakfast') || lowerMessage.includes('dinner') || lowerMessage.includes('snack')))
     ) {
-      console.log('🎯 Meal intent detected! Processing message:', userMessage)
-      const mealsData = await processMealFromMessage(userMessage, image)
-      console.log('📊 Processed meal data:', mealsData)
+      // Check if user explicitly wants to bypass library
+      const bypassLibrary = lowerMessage.includes('not in library') || 
+                           lowerMessage.includes('not in the library') ||
+                           lowerMessage.includes('skip library') ||
+                           lowerMessage.includes('manual entry') ||
+                           lowerMessage.includes('estimate only')
+              console.log('🎯 Meal intent detected! Processing message:', userMessage)
+        console.log('📚 Bypass library:', bypassLibrary)
+        const mealsData = await processMealFromMessage(userMessage, image, bypassLibrary)
+        console.log('📊 Processed meal data:', mealsData)
       
       if (mealsData && Array.isArray(mealsData) && mealsData.length > 0) {
         
@@ -360,7 +367,7 @@ async function processIntentAndTakeAction(
 
     // Intent: Plan a meal
     if (lowerMessage.includes('plan') && (lowerMessage.includes('meal') || lowerMessage.includes('dinner') || lowerMessage.includes('lunch') || lowerMessage.includes('breakfast'))) {
-      const mealsData = await processMealFromMessage(userMessage, image)
+      const mealsData = await processMealFromMessage(userMessage, image, false)
       if (mealsData && Array.isArray(mealsData) && mealsData.length > 0) {
         const savedMeals = []
         
@@ -402,7 +409,7 @@ async function processIntentAndTakeAction(
       const plannedMeal = todaysMeals.find(m => m.status === 'planned')
       
       if (plannedMeal) {
-        const mealsData = image ? await processMealFromMessage(userMessage, image) : null
+        const mealsData = image ? await processMealFromMessage(userMessage, image, false) : null
         // Use first meal's data if multiple meals extracted
         const mealData = mealsData && Array.isArray(mealsData) && mealsData.length > 0 ? mealsData[0] : null
         
@@ -492,13 +499,20 @@ Rules:
 1. Look for semantic matches, not just exact text matches
 2. Consider variations like "banana bread" matching "Banana Bread Slice" 
 3. Consider brand context - Warehouse items are commonly used
-4. Only return a match if you're reasonably confident (medium+ confidence)
-5. If no good match exists, return id: null
+4. BE VERY CONSERVATIVE - only return HIGH confidence matches for very similar items
+5. If there's any ambiguity about the match, return id: null
+6. "grilled beef" should NOT match "pastelitos" - these are completely different foods
+7. Only match if the foods are essentially the same thing with minor variations
 
-Examples:
-- "banana bread" could match "Banana Bread Slice" or "Banana Bread"
-- "eggs" could match "Scrambled Eggs" or "Hard Boiled Eggs"  
-- "avocado toast" could match "Avocado Toast" or "Avocado on Toast"`
+Examples of GOOD matches (high confidence):
+- "banana bread" → "Banana Bread Slice" ✅
+- "avocado toast" → "Avocado Toast" ✅
+- "scrambled eggs" → "Scrambled Eggs" ✅
+
+Examples of BAD matches (should return null):
+- "grilled beef" → "pastelitos" ❌ (completely different foods)
+- "chicken salad" → "fruit salad" ❌ (different main ingredient)
+- "rice" → "rice cake" ❌ (different preparation)`
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -516,7 +530,7 @@ Examples:
     try {
       const result = JSON.parse(content.trim())
       
-      if (result.match && result.match.id !== null && result.match.confidence !== 'low') {
+      if (result.match && result.match.id !== null && result.match.confidence === 'high') {
         const matchedItem = libraryItems[result.match.id]
         
         if (matchedItem) {
@@ -547,7 +561,7 @@ Examples:
   }
 }
 
-async function processMealFromMessage(userMessage: string, image?: string) {
+async function processMealFromMessage(userMessage: string, image?: string, bypassLibrary?: boolean) {
   try {
     // First, try to extract foods with their meal types
     console.log('🔍 Extracting foods from message:', userMessage)
@@ -558,11 +572,18 @@ async function processMealFromMessage(userMessage: string, image?: string) {
       const processedMeals = []
       
       for (const food of extractedFoods) {
-        // First try library search
-        const libraryMatch = await findLibraryMatch(food.name)
+        let libraryMatch = null
         
-        if (libraryMatch) {
-          // Use precise library data and let AI calculate portion nutrition
+        // Only try library search if not bypassed
+        if (!bypassLibrary) {
+          libraryMatch = await findLibraryMatch(food.name)
+          console.log(`🔍 Library match for "${food.name}":`, libraryMatch ? `${libraryMatch.name} (${libraryMatch.confidence})` : 'none')
+        } else {
+          console.log(`📚 Skipping library search for "${food.name}" per user request`)
+        }
+        
+        if (libraryMatch && libraryMatch.confidence === 'high') {
+          // Only use library matches with high confidence
           const portionAdjustedNutrition = await getAIPortionCalculation(
             food.name,
             food.portionSize || 'full',
@@ -585,14 +606,18 @@ async function processMealFromMessage(userMessage: string, image?: string) {
             source: `Library (${libraryMatch.brand})`
           })
         } else {
-          // Fall back to AI estimation with portion calculation included
-          const aiEstimate = await getAIFoodEstimate(food.name, userMessage, false, food.portionSize)
+          // Use AI estimation for unclear matches or when library bypassed
+          if (libraryMatch && libraryMatch.confidence !== 'high') {
+            console.log(`⚠️ Uncertain library match for "${food.name}": found "${libraryMatch.name}" but confidence is ${libraryMatch.confidence}`)
+          }
+          
+          const aiEstimate = await getAIFoodEstimate(food.name, userMessage, false, food.portionSize, bypassLibrary)
           if (aiEstimate) {
             processedMeals.push({
               ...aiEstimate,
               type: food.type || aiEstimate.type,
               portionSize: food.portionSize || 'full',
-              source: 'AI Estimate'
+              source: libraryMatch ? `AI Estimate (uncertain library match: ${libraryMatch.name})` : 'AI Estimate'
             })
           }
         }
@@ -604,7 +629,7 @@ async function processMealFromMessage(userMessage: string, image?: string) {
     }
     
     // If no foods extracted, fall back to original AI processing
-    return await getAIFoodEstimate(userMessage, userMessage, true)
+    return await getAIFoodEstimate(userMessage, userMessage, true, undefined, bypassLibrary)
     
   } catch (error) {
     console.error('Meal processing error:', error)
@@ -678,7 +703,7 @@ Examples:
 }
 
 // Get AI nutrition estimate for a food (fallback method)
-async function getAIFoodEstimate(foodName: string, originalMessage: string, isFullMessage = false, portionSize?: string) {
+async function getAIFoodEstimate(foodName: string, originalMessage: string, isFullMessage = false, portionSize?: string, bypassLibrary?: boolean) {
   try {
     if (!process.env.OPENAI_API_KEY) {
       console.error('OpenAI API key not configured for meal processing')
