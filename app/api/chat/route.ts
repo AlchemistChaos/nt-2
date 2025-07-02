@@ -44,6 +44,7 @@ function validatePortionSize(portionSize: string | undefined): string {
   return conversions[normalized] || 'full'
 }
 
+
 export async function POST(request: NextRequest) {
   console.log('🚀 CHAT API CALLED - YOU SHOULD SEE THIS LOG!')
   try {
@@ -53,20 +54,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'OpenAI API key not configured' }, { status: 500 })
     }
 
-    const { message, image } = await request.json()
+    const { message, image, clientDate } = await request.json()
 
-    // Get current user
+    // Get current user with detailed logging
     let user
     try {
+      console.log('🔍 Attempting to get current user...')
       user = await getCurrentUser()
+      console.log('👤 getCurrentUser result:', user ? `User found: ${user.id}` : 'No user found')
     } catch (userError) {
-      console.error('Failed to get current user:', userError)
+      console.error('❌ Failed to get current user:', userError)
       return NextResponse.json({ error: 'Failed to authenticate user' }, { status: 401 })
     }
     
     if (!user) {
+      console.error('❌ No user returned from getCurrentUser - user is null/undefined')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    
+    console.log('✅ User authenticated successfully:', { id: user.id, email: user.email })
 
     // Save user message
     await addChatMessage(user.id, 'user', message)
@@ -302,17 +308,16 @@ async function processIntentAndTakeAction(
                 const meal = await addMeal(userId, {
                   meal_name: mealData.name,
                   meal_type: mealData.type || getMealTypeFromTime(),
-                  portion_size: validatePortionSize(mealData.portionSize),
+                  portion_size: mealData.portionSize || 'full',
                   date: (() => {
-                    // Use client's timezone by getting date from current moment
+                    // Use server's current date in YYYY-MM-DD format
                     const now = new Date()
-                    // Ensure we're using local date, not UTC
                     const year = now.getFullYear()
                     const month = String(now.getMonth() + 1).padStart(2, '0')
                     const day = String(now.getDate()).padStart(2, '0')
-                    const localDate = `${year}-${month}-${day}`
-                    console.log('📅 Using local date for meal:', localDate, 'from:', now.toString())
-                    return localDate
+                    const dateToUse = `${year}-${month}-${day}`
+                    console.log('📅 Using date for meal:', dateToUse)
+                    return dateToUse
                   })(),
                   kcal_total: mealData.calories,
                   g_protein: mealData.protein,
@@ -364,16 +369,15 @@ async function processIntentAndTakeAction(
             const meal = await addMeal(userId, {
               meal_name: mealData.name,
               meal_type: mealData.type || getMealTypeFromTime(),
-              portion_size: validatePortionSize(mealData.portionSize),
+              portion_size: mealData.portionSize || 'full',
               date: (() => {
-                // Use client's timezone by getting date from current moment
+                // Use server's current date in YYYY-MM-DD format
                 const now = new Date()
-                // Ensure we're using local date, not UTC
                 const year = now.getFullYear()
                 const month = String(now.getMonth() + 1).padStart(2, '0')
                 const day = String(now.getDate()).padStart(2, '0')
                 const localDate = `${year}-${month}-${day}`
-                console.log('📅 Using local date for planned meal:', localDate, 'from:', now.toString())
+                console.log('📅 Using local date for planned meal:', localDate)
                 return localDate
               })(),
               status: 'planned' as const

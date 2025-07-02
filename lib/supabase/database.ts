@@ -4,15 +4,39 @@ import { User, Preference, Meal, MealItem, ChatMessage, MealWithItems, Biometric
 export async function getCurrentUser(): Promise<User | null> {
   const supabase = await createClient()
   
-  const { data: { user: authUser } } = await supabase.auth.getUser()
-  if (!authUser) return null
+  console.log('🔍 getCurrentUser: Getting auth user from Supabase...')
+  const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+  
+  if (authError) {
+    console.error('❌ getCurrentUser: Auth error:', authError)
+    return null
+  }
+  
+  if (!authUser) {
+    console.log('❌ getCurrentUser: No authenticated user found')
+    return null
+  }
+  
+  console.log('✅ getCurrentUser: Auth user found:', { id: authUser.id, email: authUser.email })
 
-  const { data: user } = await supabase
+  console.log('🔍 getCurrentUser: Looking up user in users table...')
+  const { data: user, error: userError } = await supabase
     .from('users')
     .select('*')
     .eq('auth_user_id', authUser.id)
     .single()
 
+  if (userError) {
+    console.error('❌ getCurrentUser: Error fetching user from users table:', userError)
+    return null
+  }
+  
+  if (!user) {
+    console.log('❌ getCurrentUser: No user found in users table for auth_user_id:', authUser.id)
+    return null
+  }
+  
+  console.log('✅ getCurrentUser: User found in users table:', { id: user.id, auth_user_id: user.auth_user_id })
   return user
 }
 

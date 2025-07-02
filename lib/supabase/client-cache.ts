@@ -133,7 +133,7 @@ export function useMealsForDate(userId: string, date: string) {
       return meals || []
     },
     enabled: !!userId && !!date,
-    staleTime: 30 * 1000, // 30 seconds - allows optimistic updates to work
+    staleTime: 0, // Force fresh data every time - debug meal not appearing issue
     gcTime: 5 * 60 * 1000, // 5 minutes
   })
 }

@@ -264,7 +264,8 @@ useEffect(() => {
         },
         body: JSON.stringify({
           message: messageToSend,
-          image: imageToSend
+          image: imageToSend,
+          clientDate: selectedDate // Pass client's selected date to ensure consistency
         }),
       })
 
