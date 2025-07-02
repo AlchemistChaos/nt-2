@@ -58,6 +58,14 @@ export function CustomMealCarousel({ meals, dailyTarget, user, selectedDate, onM
     }),
     { calories: 0, protein: 0, carbs: 0, fat: 0 }
   )
+
+  // Round up all totals for display
+  const roundedTotals = {
+    calories: Math.ceil(totals.calories),
+    protein: Math.ceil(totals.protein),
+    carbs: Math.ceil(totals.carbs),
+    fat: Math.ceil(totals.fat)
+  }
     
     // Group meals by type
   const groupMealsByType = () => {
@@ -264,25 +272,25 @@ export function CustomMealCarousel({ meals, dailyTarget, user, selectedDate, onM
       <div className="mt-3 sm:mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         <div className="flex items-center gap-2 p-2 sm:p-3 bg-blue-50 rounded-lg">
           <Zap className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
-          <div className="text-sm sm:text-base font-bold text-gray-900">{totals.calories}</div>
+          <div className="text-sm sm:text-base font-bold text-gray-900">{roundedTotals.calories}</div>
           <div className="text-xs text-gray-500">Calories</div>
         </div>
         
         <div className="flex items-center gap-2 p-2 sm:p-3 bg-green-50 rounded-lg">
           <Beef className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
-          <div className="text-sm sm:text-base font-bold text-gray-900">{totals.protein}g</div>
+          <div className="text-sm sm:text-base font-bold text-gray-900">{roundedTotals.protein}g</div>
           <div className="text-xs text-gray-500">Protein</div>
         </div>
         
         <div className="flex items-center gap-2 p-2 sm:p-3 bg-orange-50 rounded-lg">
           <Wheat className="h-4 w-4 sm:h-5 sm:w-5 text-orange-600" />
-          <div className="text-sm sm:text-base font-bold text-gray-900">{totals.carbs}g</div>
+          <div className="text-sm sm:text-base font-bold text-gray-900">{roundedTotals.carbs}g</div>
           <div className="text-xs text-gray-500">Carbs</div>
         </div>
         
         <div className="flex items-center gap-2 p-2 sm:p-3 bg-purple-50 rounded-lg">
           <Droplets className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
-          <div className="text-sm sm:text-base font-bold text-gray-900">{totals.fat}g</div>
+          <div className="text-sm sm:text-base font-bold text-gray-900">{roundedTotals.fat}g</div>
           <div className="text-xs text-gray-500">Fat</div>
         </div>
       </div>

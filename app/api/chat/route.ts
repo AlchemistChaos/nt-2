@@ -326,10 +326,10 @@ async function processIntentAndTakeAction(
                     console.log('📅 Using date for meal:', dateToUse)
                     return dateToUse
                   })(),
-                  kcal_total: mealData.calories,
-                  g_protein: mealData.protein,
-                  g_carb: mealData.carbs,
-                  g_fat: mealData.fat,
+                  kcal_total: mealData.calories ? Math.ceil(mealData.calories) : undefined,
+                  g_protein: mealData.protein ? Math.ceil(mealData.protein) : undefined,
+                  g_carb: mealData.carbs ? Math.ceil(mealData.carbs) : undefined,
+                  g_fat: mealData.fat ? Math.ceil(mealData.fat) : undefined,
                   status: 'logged' as const
                 })
                 
@@ -387,6 +387,10 @@ async function processIntentAndTakeAction(
                 console.log('📅 Using local date for planned meal:', localDate)
                 return localDate
               })(),
+              kcal_total: mealData.calories ? Math.ceil(mealData.calories) : undefined,
+              g_protein: mealData.protein ? Math.ceil(mealData.protein) : undefined,
+              g_carb: mealData.carbs ? Math.ceil(mealData.carbs) : undefined,
+              g_fat: mealData.fat ? Math.ceil(mealData.fat) : undefined,
               status: 'planned' as const
             })
             savedMeals.push(meal)
@@ -415,10 +419,10 @@ async function processIntentAndTakeAction(
         
         const updatedMeal = await updateMeal(plannedMeal.id, {
           status: 'logged',
-          kcal_total: mealData?.calories || plannedMeal.kcal_total,
-          g_protein: mealData?.protein || plannedMeal.g_protein,
-          g_carb: mealData?.carbs || plannedMeal.g_carb,
-          g_fat: mealData?.fat || plannedMeal.g_fat
+          kcal_total: mealData?.calories ? Math.ceil(mealData.calories) : plannedMeal.kcal_total,
+          g_protein: mealData?.protein ? Math.ceil(mealData.protein) : plannedMeal.g_protein,
+          g_carb: mealData?.carbs ? Math.ceil(mealData.carbs) : plannedMeal.g_carb,
+          g_fat: mealData?.fat ? Math.ceil(mealData.fat) : plannedMeal.g_fat
         })
 
         return { type: 'meal_updated', data: updatedMeal }
@@ -858,10 +862,10 @@ Examples:
     try {
       const result = JSON.parse(content.trim())
       return {
-        calories: Math.round(result.calories || 0),
-        protein: Math.round((result.protein || 0) * 10) / 10,
-        carbs: Math.round((result.carbs || 0) * 10) / 10,
-        fat: Math.round((result.fat || 0) * 10) / 10
+        calories: Math.ceil(result.calories || 0),
+        protein: Math.ceil(result.protein || 0),
+        carbs: Math.ceil(result.carbs || 0),
+        fat: Math.ceil(result.fat || 0)
       }
     } catch {
       return fullPortionNutrition

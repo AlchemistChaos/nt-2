@@ -20,6 +20,14 @@ export function DailyProgress({ meals, dailyTarget }: DailyProgressProps) {
     { calories: 0, protein: 0, carbs: 0, fat: 0 }
   )
 
+  // Round up all totals for display
+  const roundedTotals = {
+    calories: Math.ceil(totals.calories),
+    protein: Math.ceil(totals.protein),
+    carbs: Math.ceil(totals.carbs),
+    fat: Math.ceil(totals.fat)
+  }
+
   // If no daily target is set, show basic totals
   if (!dailyTarget) {
     return (
@@ -30,19 +38,19 @@ export function DailyProgress({ meals, dailyTarget }: DailyProgressProps) {
         </div>
         <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
-            <div className="text-lg sm:text-2xl font-bold text-gray-900">{totals.calories}</div>
+            <div className="text-lg sm:text-2xl font-bold text-gray-900">{roundedTotals.calories}</div>
             <div className="text-xs sm:text-sm text-gray-500">Calories</div>
           </div>
           <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
-            <div className="text-lg sm:text-2xl font-bold text-gray-900">{totals.protein}g</div>
+            <div className="text-lg sm:text-2xl font-bold text-gray-900">{roundedTotals.protein}g</div>
             <div className="text-xs sm:text-sm text-gray-500">Protein</div>
           </div>
           <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
-            <div className="text-lg sm:text-2xl font-bold text-gray-900">{totals.carbs}g</div>
+            <div className="text-lg sm:text-2xl font-bold text-gray-900">{roundedTotals.carbs}g</div>
             <div className="text-xs sm:text-sm text-gray-500">Carbs</div>
           </div>
           <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
-            <div className="text-lg sm:text-2xl font-bold text-gray-900">{totals.fat}g</div>
+            <div className="text-lg sm:text-2xl font-bold text-gray-900">{roundedTotals.fat}g</div>
             <div className="text-xs sm:text-sm text-gray-500">Fat</div>
           </div>
         </div>
@@ -55,8 +63,8 @@ export function DailyProgress({ meals, dailyTarget }: DailyProgressProps) {
     )
   }
 
-  // Calculate progress percentages
-  const calorieProgress = dailyTarget.calories_target ? (totals.calories / dailyTarget.calories_target) * 100 : 0
+  // Calculate progress percentages using rounded totals
+  const calorieProgress = dailyTarget.calories_target ? (roundedTotals.calories / dailyTarget.calories_target) * 100 : 0
 
   const ProgressBar = ({ current, target, label, color = 'blue' }: {
     current: number
@@ -108,7 +116,7 @@ export function DailyProgress({ meals, dailyTarget }: DailyProgressProps) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {dailyTarget.calories_target && (
           <ProgressBar
-            current={totals.calories}
+            current={roundedTotals.calories}
             target={dailyTarget.calories_target}
             label="Calories"
             color="blue"
@@ -117,7 +125,7 @@ export function DailyProgress({ meals, dailyTarget }: DailyProgressProps) {
         
         {dailyTarget.protein_target && (
           <ProgressBar
-            current={totals.protein}
+            current={roundedTotals.protein}
             target={dailyTarget.protein_target}
             label="Protein (g)"
             color="green"
@@ -126,7 +134,7 @@ export function DailyProgress({ meals, dailyTarget }: DailyProgressProps) {
         
         {dailyTarget.carbs_target && (
           <ProgressBar
-            current={totals.carbs}
+            current={roundedTotals.carbs}
             target={dailyTarget.carbs_target}
             label="Carbs (g)"
             color="orange"
@@ -135,7 +143,7 @@ export function DailyProgress({ meals, dailyTarget }: DailyProgressProps) {
         
         {dailyTarget.fat_target && (
           <ProgressBar
-            current={totals.fat}
+            current={roundedTotals.fat}
             target={dailyTarget.fat_target}
             label="Fat (g)"
             color="purple"
